@@ -70,13 +70,13 @@ Add `cli` to your project's `alya.toml`:
 
 ```toml
 [dependencies]
-cli = { git = "https://github.com/alya-lang/cli", tag = "v0.1.0" }
+cli = { git = "https://github.com/alya-lang/cli", branch = "main" }
 ```
 
 Or install it directly with `alyac`:
 
 ```bash
-alyac add cli --git https://github.com/alya-lang/cli --tag v0.1.0
+alyac add cli --git https://github.com/alya-lang/cli --branch main
 alyac install
 ```
 
