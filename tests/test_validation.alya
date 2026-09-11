@@ -1,0 +1,50 @@
+# Test suite for CLI validation: required options, allowed choices, and required arguments
+import "std/test"
+import "../src/lib.alya" as cli
+
+function main()
+    test_suite("CLI Validation Tests")
+    let r = runner_new()
+
+    let app = cli::new("valid-app", "Validation testing tool", "1.0.0")
+    cli::app_add_required_option(app, "-c, --config", "Configuration file path")
+    cli::app_add_choice_option(app, "--format", "json", ["json", "yaml", "table"], "Output format")
+    cli::app_add_argument(app, "target", "Target to deploy", 1)
+
+    # 1. Valid invocation
+    let ctx1 = cli::parse(app, ["--config=app.conf", "--format=yaml", "production"])
+    runner_assert_eq(r, cli::ctx_has_errors(ctx1), 0, "valid args have 0 errors")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "config"), "app.conf", "config option set")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "format"), "yaml", "format option set")
+    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx1, "target"), "production", "target arg set")
+
+    # 2. Missing required option --config
+    let ctx2 = cli::parse(app, ["--format=json", "production"])
+    runner_assert_eq(r, cli::ctx_has_errors(ctx2), 1, "missing config triggers error")
+    let errs2 = cli::ctx_get_errors(ctx2)
+    runner_assert_eq(r, len(errs2), 1, "1 error for missing config")
+    let e0 = str_from_ptr(errs2[0])
+    runner_assert_eq(r, contains(e0, "Missing required option: --config"), 1, "error message contains config")
+
+    # 3. Invalid choice for --format
+    let ctx3 = cli::parse(app, ["-c", "app.conf", "--format=xml", "production"])
+    runner_assert_eq(r, cli::ctx_has_errors(ctx3), 1, "invalid choice xml triggers error")
+    let errs3 = cli::ctx_get_errors(ctx3)
+    let e1 = str_from_ptr(errs3[0])
+    runner_assert_eq(r, contains(e1, "Invalid value 'xml'"), 1, "error message contains xml")
+    runner_assert_eq(r, contains(e1, "Allowed choices"), 1, "error message specifies allowed choices")
+
+    # 4. Missing required positional argument <target>
+    let ctx4 = cli::parse(app, ["--config=test.conf"])
+    runner_assert_eq(r, cli::ctx_has_errors(ctx4), 1, "missing required argument triggers error")
+    let errs4 = cli::ctx_get_errors(ctx4)
+    let e2 = str_from_ptr(errs4[0])
+    runner_assert_eq(r, contains(e2, "Missing required argument: <target>"), 1, "error message specifies <target>")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

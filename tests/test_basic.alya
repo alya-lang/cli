@@ -1,28 +1,55 @@
-# Test suite for cli
+# Test suite for CLI basic features
 import "std/test"
-import "../src/lib.alya" as pkg
+import "../src/lib.alya" as cli
 
 function main()
-    test_suite("cli Test Suite")
+    test_suite("CLI Basic Functionality Tests")
     let r = runner_new()
 
-    # 1. Basic facade function
-    let res = pkg::hello("Alya")
-    runner_assert_str_eq(r, res, "Hello, Alya!", "pkg::hello returns formatted greeting")
+    # 1. App creation and metadata
+    let app = cli::new("test-cli", "A modern test CLI", "1.5.0")
+    runner_assert_str_eq(r, app.name, "test-cli", "app name is test-cli")
+    runner_assert_str_eq(r, app.version, "1.5.0", "app version is 1.5.0")
 
-    # 2. Default parameter
-    let default_res = pkg::hello()
-    runner_assert_str_eq(r, default_res, "Hello, World!", "pkg::hello() uses default name")
+    # 2. Adding flags and options
+    cli::app_add_flag(app, "-v, --verbose", "Enable verbose mode")
+    cli::app_add_flag(app, "-d, --debug", "Enable debug mode")
+    cli::app_add_option(app, "-o, --output", "dist", "Output directory")
+    cli::app_add_option(app, "-e, --env", "dev", "Environment")
+    cli::app_add_argument(app, "input", "Input file")
 
-    # 3. Modular types & config constructor
-    let cfg = pkg::new_config("Community", 3)
-    runner_assert_str_eq(r, cfg.name, "Community", "pkg::new_config sets name correctly")
-    runner_assert_str_eq(r, cfg.prefix, "Hello", "pkg::new_config sets default prefix")
-    runner_assert_eq(r, cfg.count, 3, "pkg::new_config sets count correctly")
+    # 3. Parsing with long options and flags
+    let args1 = ["--verbose", "--output=build", "main.alya"]
+    let ctx1 = cli::parse(app, args1)
 
-    # 4. Core custom formatter using struct
-    let custom_res = pkg::core_format_custom(cfg)
-    runner_assert_str_eq(r, custom_res, "Hello, Community!", "pkg::core_format_custom formats using config")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "verbose"), 1, "flag verbose is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "v"), 1, "short flag v is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "debug"), 0, "unspecified flag debug is 0")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "output"), "build", "output is build")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "o"), "build", "short opt o is build")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "env"), "dev", "default env is dev")
+    runner_assert_eq(r, len(cli::ctx_get_args(ctx1)), 1, "positional args count is 1")
+    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx1, "input"), "main.alya", "arg input is main.alya")
+    runner_assert_str_eq(r, cli::ctx_get_arg(ctx1, 0), "main.alya", "arg index 0 is main.alya")
+
+    # 4. Parsing with short flags and space-separated option values
+    let args2 = ["-v", "-o", "bin/out", "-e", "prod", "server.alya"]
+    let ctx2 = cli::parse(app, args2)
+
+    runner_assert_eq(r, cli::ctx_get_flag(ctx2, "verbose"), 1, "short -v enables verbose")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "output"), "bin/out", "short -o sets output")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "env"), "prod", "short -e sets env")
+    runner_assert_str_eq(r, cli::ctx_get_arg(ctx2, 0), "server.alya", "arg 0 is server.alya")
+
+    # 5. Double dash terminator --
+    let args3 = ["-v", "--", "--not-a-flag", "-o", "file.txt"]
+    let ctx3 = cli::parse(app, args3)
+
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "verbose"), 1, "verbose flag before -- parsed")
+    runner_assert_eq(r, len(cli::ctx_get_args(ctx3)), 3, "positional args after -- count is 3")
+    runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 0), "--not-a-flag", "first raw arg preserved")
+    runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 1), "-o", "second raw arg preserved")
+    runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 2), "file.txt", "third raw arg preserved")
 
     let failed = runner_summary(r)
     if failed > 0

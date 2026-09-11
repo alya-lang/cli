@@ -1,0 +1,508 @@
+# CLI Package - Stdlib Backward Compatibility Layer
+# Provides 100% drop-in compatibility for all legacy std/cli structs and functions.
+
+import "./utils.alya"
+
+struct CliOpt
+    copt_short
+    copt_long
+    copt_desc
+    copt_flag
+    copt_default
+    copt_required
+end
+
+struct CliCmd
+    ccmd_name
+    ccmd_desc
+end
+
+struct CliParser
+    cparser_name
+    cparser_desc
+    version
+    cparser_opts
+    cparser_cmds
+    cparser_args
+end
+
+struct CliResult
+    cres_flags
+    cres_options
+    cres_args
+    cres_command
+    cres_errors
+    cres_help_req
+end
+
+# --- Lookup Helpers for Compat Layer ---
+
+function _compat_find_opt_by_long(parser, name)
+    let n = str_from_ptr(name)
+    let count = len(parser.cparser_opts)
+    let i = 0
+    while i < count
+        let opt = parser.cparser_opts[i]
+        if str_from_ptr(opt.copt_long) == n
+            return opt
+        end
+        i += 1
+    end
+    return 0
+end
+
+function _compat_find_opt_by_short(parser, name)
+    let n = str_from_ptr(name)
+    let count = len(parser.cparser_opts)
+    let i = 0
+    while i < count
+        let opt = parser.cparser_opts[i]
+        if str_from_ptr(opt.copt_short) == n
+            return opt
+        end
+        i += 1
+    end
+    return 0
+end
+
+function _compat_is_command(parser, name)
+    let n = str_from_ptr(name)
+    let count = len(parser.cparser_cmds)
+    let i = 0
+    while i < count
+        let cmd = parser.cparser_cmds[i]
+        if str_from_ptr(cmd.ccmd_name) == n
+            return 1
+        end
+        i += 1
+    end
+    return 0
+end
+
+# --- Legacy Public API ---
+
+function cli_parser(app_name, description = "")
+    return CliParser(app_name, description, "1.0.0", [], [], [])
+end
+
+function cli_set_version(parser, version)
+    parser.version = version
+    return parser
+end
+
+function cli_add_flag(parser, flags_str, description = "")
+    let names = _cli_parse_flags_spec(flags_str)
+    let s = str_from_ptr(names[0])
+    let l = str_from_ptr(names[1])
+    let opt = CliOpt(s, l, description, 1, "0", 0)
+    let defs = parser.cparser_opts
+    defs.push(opt)
+    return parser
+end
+
+function cli_add_option(parser, flags_str, default_val = "", description = "")
+    let names = _cli_parse_flags_spec(flags_str)
+    let s = str_from_ptr(names[0])
+    let l = str_from_ptr(names[1])
+    let opt = CliOpt(s, l, description, 0, default_val, 0)
+    let defs = parser.cparser_opts
+    defs.push(opt)
+    return parser
+end
+
+function cli_add_required_option(parser, flags_str, description = "")
+    let names = _cli_parse_flags_spec(flags_str)
+    let s = str_from_ptr(names[0])
+    let l = str_from_ptr(names[1])
+    let opt = CliOpt(s, l, description, 0, "", 1)
+    let defs = parser.cparser_opts
+    defs.push(opt)
+    return parser
+end
+
+function cli_add_command(parser, name, description = "")
+    let cmd = CliCmd(name, description)
+    let cmds = parser.cparser_cmds
+    cmds.push(cmd)
+    return parser
+end
+
+function cli_add_argument(parser, name, description = "")
+    let pos = parser.cparser_args
+    pos.push(name)
+    return parser
+end
+
+function cli_parse(parser, raw_args)
+    let flags = {}
+    let options = {}
+    let args_list = []
+    let errors = []
+    let command_name = ""
+    let help_req = 0
+
+    let opt_count = len(parser.cparser_opts)
+    let i = 0
+    while i < opt_count
+        let opt = parser.cparser_opts[i]
+        let s_name = str_from_ptr(opt.copt_short)
+        let l_name = str_from_ptr(opt.copt_long)
+        let def_val = str_from_ptr(opt.copt_default)
+        if opt.copt_flag == 1
+            if len(s_name) > 0
+                flags[s_name] = 0
+            end
+            if len(l_name) > 0
+                flags[l_name] = 0
+            end
+        else
+            if len(s_name) > 0
+                options[s_name] = def_val
+            end
+            if len(l_name) > 0
+                options[l_name] = def_val
+            end
+        end
+        i += 1
+    end
+
+    let num_raw = len(raw_args)
+    let idx = 0
+    let stop_options = 0
+
+    while idx < num_raw
+        let arg_str = str_from_ptr(raw_args[idx])
+        let arg_len = len(arg_str)
+
+        if stop_options == 1
+            args_list.push(arg_str)
+            idx += 1
+        elif arg_str == "--"
+            stop_options = 1
+            idx += 1
+        elif arg_str == "-h" or arg_str == "--help"
+            help_req = 1
+            flags["help"] = 1
+            flags["h"] = 1
+            idx += 1
+        elif arg_str == "-V" or arg_str == "--version"
+            flags["version"] = 1
+            flags["V"] = 1
+            idx += 1
+        elif _cli_starts_with(arg_str, "--") == 1
+            let eq_pos = _cli_find_char(arg_str, "=")
+            if eq_pos != -1
+                let raw_k = substring(arg_str, 2, eq_pos - 2)
+                let val = substring(arg_str, eq_pos + 1, arg_len - (eq_pos + 1))
+                options[raw_k] = val
+                let opt_match = _compat_find_opt_by_long(parser, raw_k)
+                if opt_match != 0
+                    let sh = str_from_ptr(opt_match.copt_short)
+                    if len(sh) > 0
+                        options[sh] = val
+                    end
+                end
+            else
+                let raw_k = substring(arg_str, 2, arg_len - 2)
+                let opt_match = _compat_find_opt_by_long(parser, raw_k)
+                if opt_match != 0
+                    if opt_match.copt_flag == 1
+                        flags[raw_k] = 1
+                        let sh = str_from_ptr(opt_match.copt_short)
+                        if len(sh) > 0
+                            flags[sh] = 1
+                        end
+                    else
+                        if idx + 1 < num_raw
+                            idx += 1
+                            let val = str_from_ptr(raw_args[idx])
+                            options[raw_k] = val
+                            let sh = str_from_ptr(opt_match.copt_short)
+                            if len(sh) > 0
+                                options[sh] = val
+                            end
+                        else
+                            errors.push("Missing value for option: --" + raw_k)
+                        end
+                    end
+                else
+                    flags[raw_k] = 1
+                end
+            end
+            idx += 1
+        elif _cli_starts_with(arg_str, "-") == 1 and arg_str != "-"
+            let raw_s = substring(arg_str, 1, arg_len - 1)
+            let opt_match = _compat_find_opt_by_short(parser, raw_s)
+            if opt_match != 0
+                if opt_match.copt_flag == 1
+                    flags[raw_s] = 1
+                    let lg = str_from_ptr(opt_match.copt_long)
+                    if len(lg) > 0
+                        flags[lg] = 1
+                    end
+                else
+                    if idx + 1 < num_raw
+                        idx += 1
+                        let val = str_from_ptr(raw_args[idx])
+                        options[raw_s] = val
+                        let lg = str_from_ptr(opt_match.copt_long)
+                        if len(lg) > 0
+                            options[lg] = val
+                        end
+                    else
+                        errors.push("Missing value for option: -" + raw_s)
+                    end
+                end
+            else
+                flags[raw_s] = 1
+            end
+            idx += 1
+        else
+            let is_cmd = 0
+            if len(command_name) == 0
+                if _compat_is_command(parser, arg_str) == 1
+                    command_name = arg_str
+                    is_cmd = 1
+                end
+            end
+            if is_cmd == 0
+                args_list.push(arg_str)
+            end
+            idx += 1
+        end
+    end
+
+    # Check required options
+    let req_i = 0
+    while req_i < opt_count
+        let req_opt = parser.cparser_opts[req_i]
+        if req_opt.copt_required == 1
+            let l_req = str_from_ptr(req_opt.copt_long)
+            let s_req = str_from_ptr(req_opt.copt_short)
+            let has_val = 0
+            if len(l_req) > 0
+                if has(options, l_req) == 1
+                    let v = str_from_ptr(get(options, l_req))
+                    if len(v) > 0
+                        has_val = 1
+                    end
+                end
+            end
+            if len(s_req) > 0
+                if has(options, s_req) == 1
+                    let v = str_from_ptr(get(options, s_req))
+                    if len(v) > 0
+                        has_val = 1
+                    end
+                end
+            end
+            if has_val == 0
+                errors.push("Missing required option: --" + l_req)
+            end
+        end
+        req_i += 1
+    end
+
+    return CliResult(flags, options, args_list, command_name, errors, help_req)
+end
+
+function cli_parse_args(parser)
+    return cli_parse(parser, args())
+end
+
+function cli_get_flag(result, name)
+    let clean = _cli_strip_dashes(name)
+    let fl = result.cres_flags
+    if has(fl, clean) == 1
+        return get(fl, clean)
+    end
+    return 0
+end
+
+function cli_get_option(result, name, default_val = "")
+    let clean = _cli_strip_dashes(name)
+    let opts = result.cres_options
+    if has(opts, clean) == 1
+        return str_from_ptr(get(opts, clean))
+    end
+    return default_val
+end
+
+function cli_get_arg(result, idx, default_val = "")
+    let r_args = result.cres_args
+    if idx >= 0
+        if idx < len(r_args)
+            return str_from_ptr(r_args[idx])
+        end
+    end
+    return default_val
+end
+
+function cli_get_args(result)
+    return result.cres_args
+end
+
+function cli_get_command(result)
+    return str_from_ptr(result.cres_command)
+end
+
+function cli_has_command(result, name)
+    let n = str_from_ptr(name)
+    let c = str_from_ptr(result.cres_command)
+    return c == n
+end
+
+function cli_has_errors(result)
+    let errs = result.cres_errors
+    return len(errs) > 0
+end
+
+function cli_get_errors(result)
+    return result.cres_errors
+end
+
+function cli_help_requested(result)
+    return result.cres_help_req
+end
+
+function cli_help(parser)
+    let out = "Usage: " + str_from_ptr(parser.cparser_name)
+    if len(parser.cparser_cmds) > 0
+        out = out + " [COMMAND]"
+    end
+    out = out + " [OPTIONS]"
+    if len(parser.cparser_args) > 0
+        out = out + " [ARGS]"
+    end
+    out = out + "\n\n"
+
+    let desc = str_from_ptr(parser.cparser_desc)
+    if len(desc) > 0
+        out = out + desc + "\n\n"
+    end
+
+    if len(parser.cparser_cmds) > 0
+        out = out + "Commands:\n"
+        let num_cmd = len(parser.cparser_cmds)
+        let i = 0
+        while i < num_cmd
+            let cmd = parser.cparser_cmds[i]
+            let cname = str_from_ptr(cmd.ccmd_name)
+            let cdesc = str_from_ptr(cmd.ccmd_desc)
+            out = out + "  " + _cli_pad_right(cname, 14) + " " + cdesc + "\n"
+            i += 1
+        end
+        out = out + "\n"
+    end
+
+    out = out + "Options:\n"
+    let num_opts = len(parser.cparser_opts)
+    let j = 0
+    while j < num_opts
+        let opt = parser.cparser_opts[j]
+        let s = str_from_ptr(opt.copt_short)
+        let l = str_from_ptr(opt.copt_long)
+        let d = str_from_ptr(opt.copt_desc)
+        let def = str_from_ptr(opt.copt_default)
+        let opt_label = ""
+        if len(s) > 0
+            if len(l) > 0
+                opt_label = "-" + s + ", --" + l
+            else
+                opt_label = "-" + s
+            end
+        elif len(l) > 0
+            opt_label = "    --" + l
+        else
+            opt_label = "-" + s
+        end
+        if opt.copt_flag == 0
+            opt_label = opt_label + " <value>"
+        end
+
+        let line = "  " + _cli_pad_right(opt_label, 26) + " " + d
+        if opt.copt_flag == 0
+            if len(def) > 0
+                line = line + " (default: " + def + ")"
+            end
+        end
+        out = out + line + "\n"
+        j += 1
+    end
+    out = out + "  -h, --help                 Show help information\n"
+    out = out + "  -V, --version              Show version information\n"
+    return out
+end
+
+function cli_print_help(parser)
+    say cli_help(parser)
+end
+
+# --- Direct Convenience Helpers ---
+
+function cli_raw_args()
+    return args()
+end
+
+function cli_has_flag(flag_name)
+    let raw = args()
+    let clean = _cli_strip_dashes(flag_name)
+    let target_long = "--" + clean
+    let target_short = "-" + clean
+    let count = len(raw)
+    let i = 0
+    while i < count
+        let arg = str_from_ptr(raw[i])
+        if arg == target_long or arg == target_short
+            return 1
+        end
+        i += 1
+    end
+    return 0
+end
+
+function cli_get_opt(opt_name, default_val = "")
+    let raw = args()
+    let clean = _cli_strip_dashes(opt_name)
+    let target_long = "--" + clean
+    let target_short = "-" + clean
+    let prefix = target_long + "="
+    let prefix_len = len(prefix)
+    let count = len(raw)
+    let i = 0
+    while i < count
+        let arg = str_from_ptr(raw[i])
+        let arg_len = len(arg)
+        if _cli_starts_with(arg, prefix) == 1
+            return substring(arg, prefix_len, arg_len - prefix_len)
+        end
+        if arg == target_long or arg == target_short
+            if i + 1 < count
+                return str_from_ptr(raw[i + 1])
+            end
+        end
+        i += 1
+    end
+    return default_val
+end
+
+function cli_get_positional(idx, default_val = "")
+    let raw = args()
+    let count = len(raw)
+    let pos_idx = 0
+    let i = 0
+    while i < count
+        let arg = str_from_ptr(raw[i])
+        let arg_len = len(arg)
+        if arg_len > 0
+            if substring(arg, 0, 1) != "-"
+                if pos_idx == idx
+                    return arg
+                end
+                pos_idx += 1
+            end
+        end
+        i += 1
+    end
+    return default_val
+end

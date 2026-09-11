@@ -5,52 +5,75 @@
 [![Alya](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Falya-lang%2Fcli%2Fmain%2Falya.toml&query=%24.package.alya-version&label=Alya&color=orange&prefix=%3E%3D)](https://github.com/alya-lang/alya)
 [![Package Version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2Falya-lang%2Fcli%2Fmain%2Falya.toml&query=%24.package.version&label=Version&color=brightgreen)](alya.toml)
 
-Modern command-line interface, argument parsing, flag handling, and subcommand router for Alya
+Modern, feature-rich command-line interface, argument parsing, flag validation, and subcommand routing toolkit for the Alya programming language.
 
 ---
 
 ## 🌟 Features
 
-- ⚡ **Lightweight & Fast**: Built for speed with minimal overhead
-- 🧩 **Modular Architecture**: Multi-module design supporting flat modules (`types.alya`) and subfolder hierarchies (`core/formatter.alya`)
-- 🛡️ **Reliable & Typed**: Explicit struct definitions and clean namespaced APIs
-- 🧪 **Well Tested**: Comprehensive test suite with standard assertions
+- ⚡ **High Performance**: Native compiled parser with sub-microsecond option lookups and minimal allocations.
+- 🏳️ **Comprehensive Flag Support**:
+  - Long flags: `--verbose`, `--debug`
+  - Short flags: `-v`, `-d`
+  - Clustered short flags: `-abc` (equivalent to `-a -b -c`)
+  - Inverted boolean flags: `--no-color`, `--no-cache` (sets `color` / `cache` to 0)
+- 🎛️ **Flexible Option Parsing**:
+  - Key-value options: `--output=dist`, `--output dist`
+  - Attached short options: `-oDist`, `-o dist`
+  - Repeated / multi-value options: `-I dir1 -I dir2` (accumulates into array)
+- 🛡️ **Validation & Constraints**:
+  - Choice restrictions: e.g. `--format` allowed only in `["json", "yaml", "text"]`
+  - Required options: automated reporting when mandatory options are omitted
+  - Argument arity and type checks
+- 🌳 **Subcommand Routing**:
+  - Full hierarchical subcommands with isolated options and arguments (e.g. `forge build -r`, `forge test`)
+  - Command aliases (e.g. `build` with alias `b`)
+- 📄 **Automated Help & Version**:
+  - Auto-generated, column-aligned help screens for applications and subcommands
+  - Automatic `-h, --help` and `-V, --version` flag handling
+- 🔄 **100% Backward Compatibility**:
+  - Drop-in replacement for the legacy `std/cli` module (`cli_parser`, `cli_add_flag`, `cli_parse`, `cli_get_option`, etc.)
 
 ---
 
-## 📁 Project Architecture
+## 📁 Architecture
 
 ```
 cli/
 ├── alya.toml               # Package manifest
 ├── src/
-│   ├── lib.alya            # Public API facade
-│   ├── types.alya          # Data structures & struct definitions
-│   └── core/               # Subdirectory module hierarchy (optional for larger packages)
-│       └── formatter.alya  # Domain formatting logic & internal helpers
+│   ├── lib.alya            # High-level facade API
+│   ├── types.alya          # CliApp, CliCommand, CliOption, CliArgument, CliContext
+│   └── core/
+│       ├── parser.alya     # Parsing engine, flag clustering, validation logic
+│       ├── formatter.alya  # Help screen and version formatting
+│       ├── utils.alya      # String and array utilities
+│       └── compat.alya     # 100% drop-in backward compatibility for std/cli
 ├── examples/
-│   └── demo.alya           # Runnable usage examples
+│   └── demo.alya           # Working demonstration CLI application
 ├── tests/
-│   └── test_basic.alya     # Automated test suite
+│   ├── test_basic.alya          # App creation, flags, options, double-dash
+│   ├── test_flags_advanced.alya # Clustered flags, inverted flags, multi options
+│   ├── test_commands.alya       # Subcommands, aliases, command-scoped flags
+│   ├── test_validation.alya     # Choice validation, required options, errors
+│   ├── test_formatter.alya      # Help screen and version formatting tests
+│   └── test_compat.alya         # Legacy std/cli compatibility suite
 └── benches/
-    └── bench_basic.alya    # Micro-benchmarks
+    └── bench_basic.alya    # Micro-benchmark suite
 ```
-
-> [!NOTE]
-> Modules can be structured flat inside `src/` (e.g. `src/types.alya`) or grouped into subdirectories (e.g. `src/core/formatter.alya`). Relative imports like `import "../types.alya"` or `import "./core/formatter.alya"` are resolved relative to the importing file and deduplicated transitively.
 
 ---
 
 ## 📦 Installation
 
-Add `cli` to the `[dependencies]` section in your `alya.toml`:
+Add `cli` to your project's `alya.toml`:
 
 ```toml
 [dependencies]
 cli = { git = "https://github.com/alya-lang/cli", tag = "v0.1.0" }
 ```
 
-Or install it directly using the Alya package CLI:
+Or install it directly with `alyac`:
 
 ```bash
 alyac add cli --git https://github.com/alya-lang/cli --tag v0.1.0
@@ -62,17 +85,43 @@ alyac install
 ## 🚀 Quick Start
 
 ```alya
-import "cli" as pkg
+import "cli" as cli
 
 function main()
-    # Basic facade call
-    let greeting = pkg::hello("Alya")
-    say greeting
+    # 1. Create CLI application
+    let app = cli::new("forge", "Alya build and testing tool", "1.0.0")
 
-    # Struct construction and domain helpers
-    let cfg = pkg::new_config("Community", 2)
-    say "Target: " + cfg.name
-    say "Formatted: " + pkg::core_format_custom(cfg)
+    # 2. Add global flags and options
+    cli::app_add_flag(app, "-v, --verbose", "Enable verbose logs")
+    cli::app_add_option(app, "-o, --output", "dist", "Output directory")
+
+    # 3. Add subcommand
+    let build_cmd = cli::command("build", "Compile package artifacts", ["b"])
+    cli::cmd_add_flag(build_cmd, "-r, --release", "Build optimized release")
+    cli::cmd_add_argument(build_cmd, "entrypoint", "Source file to compile", 0, "src/main.alya")
+    cli::app_add_command(app, build_cmd)
+
+    # 4. Parse command-line arguments
+    let ctx = cli::parse_args(app)
+
+    # 5. Check help or errors
+    if cli::ctx_help_requested(ctx) == 1
+        cli::print_help(app)
+        return
+    end
+
+    if cli::ctx_has_errors(ctx) == 1
+        say cli::cli_format_errors(cli::ctx_get_errors(ctx))
+        exit(1)
+    end
+
+    # 6. Access parsed values
+    if cli::ctx_has_command(ctx, "build") == 1
+        let release = cli::ctx_get_flag(ctx, "release")
+        let out_dir = cli::ctx_get_option(ctx, "output", "dist")
+        let entry = cli::ctx_get_arg_named(ctx, "entrypoint", "src/main.alya")
+        say "Building " + entry + " (release=" + str(release) + ") into " + out_dir
+    end
 end
 
 main()
@@ -82,30 +131,94 @@ main()
 
 ## 📖 API Reference
 
-| Function | Arguments | Returns | Description |
-|---|---|---|---|
-| `hello(name)` | `name = "World"` | `string` | Returns a friendly greeting message. |
-| `new_config(name, count)` | `name = "World", count = 1` | `CliConfig` | Constructs a new configuration struct. |
-| `core_format_greeting(name)` | `name` | `string` | Core formatter producing `Hello, {name}!`. |
-| `core_format_custom(config)` | `config: CliConfig` | `string` | Formats greeting using prefix and name from config. |
+### Application & Command Construction
+
+| Function | Arguments | Description |
+|---|---|---|
+| `cli::new(name, desc, ver)` | `name, desc = "", ver = "1.0.0"` | Creates a new `CliApp`. |
+| `cli::app_set_author(app, author)` | `app, author` | Sets application author. |
+| `cli::command(name, desc, aliases)` | `name, desc = "", aliases = []` | Creates a new `CliCommand`. |
+| `cli::app_add_command(app, cmd)` | `app, cmd` | Registers a subcommand on the application. |
+
+### Option & Flag Definition
+
+| Function | Target | Description |
+|---|---|---|
+| `cli::app_add_flag(app, spec, desc)` | `CliApp` | Adds a boolean flag (`-v, --verbose`). |
+| `cli::app_add_option(app, spec, def, desc)` | `CliApp` | Adds a string option with default value. |
+| `cli::app_add_required_option(app, spec, desc)` | `CliApp` | Adds a required option. |
+| `cli::app_add_multi_option(app, spec, desc)` | `CliApp` | Adds a repeatable option (e.g. `-I dir`). |
+| `cli::app_add_choice_option(app, spec, def, choices, desc)` | `CliApp` | Adds an option restricted to specific choice strings. |
+| `cli::app_add_argument(app, name, desc, req, def, var)` | `CliApp` | Adds a positional argument. |
+| `cli::cmd_add_flag(cmd, spec, desc)` | `CliCommand` | Adds a flag scoped to the subcommand. |
+| `cli::cmd_add_option(cmd, spec, def, desc)` | `CliCommand` | Adds an option scoped to the subcommand. |
+| `cli::cmd_add_choice_option(cmd, spec, def, choices, desc)` | `CliCommand` | Adds a choice-restricted option to the subcommand. |
+| `cli::cmd_add_argument(cmd, name, desc, req, def, var)` | `CliCommand` | Adds a positional argument to the subcommand. |
+
+### Parsing & Context Queries
+
+| Function | Arguments | Description |
+|---|---|---|
+| `cli::parse(app, raw_args)` | `app, args_array` | Parses argument array into `CliContext`. |
+| `cli::parse_args(app)` | `app` | Parses current process command-line arguments. |
+| `cli::ctx_get_flag(ctx, name)` | `ctx, name` | Returns 1 if flag was set, 0 otherwise. |
+| `cli::ctx_get_option(ctx, name, def)` | `ctx, name, def = ""` | Returns option string value or fallback default. |
+| `cli::ctx_get_multi_option(ctx, name)` | `ctx, name` | Returns array of string values for repeated option. |
+| `cli::ctx_get_command(ctx)` | `ctx` | Returns the active subcommand name or `""`. |
+| `cli::ctx_has_command(ctx, name)` | `ctx, name` | Returns 1 if subcommand matches, 0 otherwise. |
+| `cli::ctx_get_arg(ctx, index, def)` | `ctx, index, def = ""` | Returns positional argument by index. |
+| `cli::ctx_get_arg_named(ctx, name, def)` | `ctx, name, def = ""` | Returns positional argument by its defined name. |
+| `cli::ctx_has_errors(ctx)` | `ctx` | Returns 1 if validation/syntax errors occurred, 0 otherwise. |
+| `cli::ctx_get_errors(ctx)` | `ctx` | Returns array of error message strings. |
+| `cli::ctx_help_requested(ctx)` | `ctx` | Returns 1 if `-h` or `--help` was encountered. |
+| `cli::ctx_version_requested(ctx)` | `ctx` | Returns 1 if `-V` or `--version` was encountered. |
+
+### Formatting & Screens
+
+| Function | Arguments | Description |
+|---|---|---|
+| `cli::help(app, cmd = 0)` | `app, cmd = 0` | Returns formatted help screen as string. |
+| `cli::print_help(app, cmd = 0)` | `app, cmd = 0` | Prints formatted help screen to stdout. |
+| `cli::cli_format_version(app)` | `app` | Returns version string (e.g. `forge 1.0.0`). |
+| `cli::cli_format_errors(errors)` | `errors` | Returns newline-separated error block. |
+
+---
+
+## 🔄 Legacy `std/cli` Backward Compatibility
+
+This package contains full drop-in compatibility for existing code migrating from `std/cli`:
+
+```alya
+import "cli" as cli
+
+let p = cli::cli_parser("my-app", "Legacy app description")
+cli::cli_add_flag(p, "-v, --verbose", "Verbose mode")
+cli::cli_add_option(p, "-o, --output", "dist", "Output dir")
+cli::cli_add_command(p, "run", "Execute runner")
+
+let res = cli::cli_parse(p, ["run", "-v"])
+if cli::cli_has_command(res, "run") == 1
+    say "Running with verbose=" + str(cli::cli_get_flag(res, "verbose"))
+end
+```
 
 ---
 
 ## 🧪 Running Tests & Benchmarks
 
-Run the test suite using `alyac`:
+Run the test suite:
 
 ```bash
-alyac run tests/test_basic.alya
+alyac test
 ```
 
-Run the benchmark suite:
+Run micro-benchmarks:
 
 ```bash
 alyac run benches/bench_basic.alya
 ```
 
-Run the example demo:
+Run the interactive demo:
 
 ```bash
 alyac run examples/demo.alya
@@ -115,20 +228,17 @@ alyac run examples/demo.alya
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository and clone it locally
+1. Fork the repository and clone locally
 2. Install dependencies:
    ```bash
    alyac install
    ```
-3. Create your feature branch (`git checkout -b feature/my-feature`)
-4. Verify tests and formatting before opening a PR:
+3. Run tests and verify code formatting:
    ```bash
    alyac test
    alyac fmt . --check
    ```
-5. Commit your changes (`git commit -m "feat: add feature"`) and open a Pull Request
+4. Commit your changes and open a Pull Request
 
 ---
 

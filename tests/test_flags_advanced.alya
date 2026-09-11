@@ -1,0 +1,66 @@
+# Test suite for advanced flags, clustered flags, array options, and inverted flags
+import "std/test"
+import "../src/lib.alya" as cli
+
+function main()
+    test_suite("CLI Advanced Flags & Options Tests")
+    let r = runner_new()
+
+    let app = cli::new("adv-app", "Advanced options test", "1.0.0")
+    cli::app_add_flag(app, "-a, --all", "All items")
+    cli::app_add_flag(app, "-b, --buffer", "Buffer mode")
+    cli::app_add_flag(app, "-c, --clean", "Clean build")
+    cli::app_add_flag(app, "--color", "Colorized output")
+    cli::app_add_option(app, "-o, --output", "dist", "Output file")
+    cli::app_add_multi_option(app, "-I, --include", "Include directories")
+
+    # 1. Clustered short flags: -abc
+    let ctx1 = cli::parse(app, ["-abc"])
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "a"), 1, "clustered flag -a is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "all"), 1, "clustered flag --all is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "b"), 1, "clustered flag -b is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "buffer"), 1, "clustered flag --buffer is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "c"), 1, "clustered flag -c is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "clean"), 1, "clustered flag --clean is 1")
+
+    # 2. Attached option value: -oMyCustomPath.tar
+    let ctx2 = cli::parse(app, ["-oMyCustomPath.tar"])
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "o"), "MyCustomPath.tar", "attached short option o")
+    runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "output"), "MyCustomPath.tar", "attached short option output")
+
+    # 3. Inverted flag: --no-color
+    let ctx3 = cli::parse(app, ["--no-color"])
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "color"), 0, "--no-color sets color to 0")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "no-color"), 1, "--no-color flag is 1")
+
+    # 4. Multi-value / array options: -I dir1 --include=dir2 -I dir3
+    let ctx4 = cli::parse(app, ["-I", "src/include", "--include=vendor/include", "-I", "third_party"])
+    let incs = cli::ctx_get_all(ctx4, "include")
+    runner_assert_eq(r, len(incs), 3, "array options collected 3 values")
+    runner_assert_str_eq(r, str_from_ptr(incs[0]), "src/include", "first include dir")
+    runner_assert_str_eq(r, str_from_ptr(incs[1]), "vendor/include", "second include dir")
+    runner_assert_str_eq(r, str_from_ptr(incs[2]), "third_party", "third include dir")
+
+    # 5. Automated -h and --help
+    let ctx5 = cli::parse(app, ["--help"])
+    runner_assert_eq(r, cli::ctx_help_requested(ctx5), 1, "help requested via --help")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx5, "help"), 1, "help flag is 1")
+
+    let ctx6 = cli::parse(app, ["-h"])
+    runner_assert_eq(r, cli::ctx_help_requested(ctx6), 1, "help requested via -h")
+
+    # 6. Automated -V and --version
+    let ctx7 = cli::parse(app, ["--version"])
+    runner_assert_eq(r, cli::ctx_version_requested(ctx7), 1, "version requested via --version")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx7, "version"), 1, "version flag is 1")
+
+    let ctx8 = cli::parse(app, ["-V"])
+    runner_assert_eq(r, cli::ctx_version_requested(ctx8), 1, "version requested via -V")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

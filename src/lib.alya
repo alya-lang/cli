@@ -1,14 +1,38 @@
-# cli library
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+# CLI Package - Modern Command-Line Interface and Argparse Toolkit
+# Part of the Alya Language Ecosystem (https://github.com/alya-lang/cli)
 
 import "./types.alya"
+import "./core/utils.alya"
+import "./core/parser.alya"
 import "./core/formatter.alya"
+import "./core/compat.alya"
 
-# Public facade functions
-function hello(name = "World")
-    return core_format_greeting(name)
+# --- High-level Facade API ---
+
+function new(name, description = "", version = "1.0.0")
+    return app_new(name, description, version)
 end
 
-function new_config(name = "World", count = 1)
-    return make_config(name, count)
+function command(name, description = "", aliases = [])
+    return cmd_new(name, description, aliases)
+end
+
+function parse(app, raw_args)
+    return app_parse(app, raw_args)
+end
+
+function parse_args(app)
+    return app_parse_args(app)
+end
+
+function help(app, cmd = 0)
+    return cli_format_help(app, cmd)
+end
+
+function print_help(app, cmd = 0)
+    say cli_format_help(app, cmd)
+end
+
+function print_version(app)
+    say cli_format_version(app)
 end

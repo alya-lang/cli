@@ -1,16 +1,54 @@
-# Types and data structures for cli
-# Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+# CLI Package - Type Definitions
+# Defines options, arguments, commands, applications, and parsing contexts.
 
-struct CliConfig
-    name
-    prefix
-    count
+struct CliOption
+    opt_short       # Short flag name (without dash, e.g. "v")
+    opt_long        # Long flag name (without dashes, e.g. "verbose")
+    opt_desc        # Description shown in help
+    opt_default     # Default string value
+    opt_is_flag     # 1 if boolean flag (no value required), 0 if option
+    opt_is_multi    # 1 if option can be repeated (collects into array)
+    opt_required    # 1 if option must be provided
+    opt_choices     # Array of allowed string values, or empty array []
 end
 
-function make_config(name = "World", count = 1)
-    return CliConfig {
-        name: name,
-        prefix: "Hello",
-        count: count
-    }
+struct CliArgument
+    arg_name        # Name of positional argument (e.g. "filename")
+    arg_desc        # Description shown in help
+    arg_required    # 1 if required, 0 if optional
+    arg_default     # Fallback value if omitted
+    arg_variadic    # 1 if captures remaining positional arguments
+end
+
+struct CliCommand
+    cmd_name        # Command name (e.g. "build")
+    cmd_aliases     # Array of alias strings (e.g. ["b"])
+    cmd_desc        # Command description
+    cmd_options     # Array of CliOption specific to this command
+    cmd_arguments   # Array of CliArgument specific to this command
+    cmd_subcommands # Array of nested CliCommand
+end
+
+struct CliApp
+    app_name        # Application executable name
+    app_desc        # Application description
+    app_version     # Semantic version string
+    app_author      # Author information or empty string
+    app_options     # Array of global CliOption
+    app_arguments   # Array of top-level CliArgument
+    app_commands    # Array of CliCommand
+end
+
+struct CliContext
+    ctx_app         # Reference to CliApp
+    ctx_cmd_name    # Name of active command or empty string
+    ctx_flags       # Map of flag name -> 1 / 0
+    ctx_options     # Map of option name -> string value
+    ctx_array_opts  # Map of option name -> array of string values
+    ctx_args        # Array of positional string arguments
+    ctx_arg_map     # Map of argument name -> string value
+    ctx_errors      # Array of validation or parsing error strings
+    ctx_help_req    # 1 if -h or --help was present
+    ctx_version_req # 1 if -V or --version was present
+    ctx_raw_args    # Raw argument list passed to parser
 end

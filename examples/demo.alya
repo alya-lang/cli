@@ -1,15 +1,55 @@
-# Example usage of cli
-import "../src/lib.alya" as pkg
+# Example usage of cli package
+import "../src/lib.alya" as cli
 
 function main()
-    # Basic greeting
-    let msg = pkg::hello("Alya Developer")
-    say msg
+    # 1. Initialize application
+    let app = cli::new("forge", "Alya high-performance build and test tool", "1.0.0")
+    cli::app_set_author(app, "Alya Language Contributors")
 
-    # Using configuration struct
-    let cfg = pkg::new_config("Modular Architecture", 5)
-    say "Target: " + cfg.name
-    say "Formatted: " + pkg::core_format_custom(cfg)
+    # 2. Configure global flags and options
+    cli::app_add_flag(app, "-v, --verbose", "Enable verbose diagnostic logs")
+    cli::app_add_flag(app, "-q, --quiet", "Suppress all non-error output")
+    cli::app_add_option(app, "-c, --config", "forge.toml", "Configuration file path")
+
+    # 3. Add 'build' command with options and arguments
+    let build_cmd = cli::command("build", "Compile target source packages", ["b"])
+    cli::cmd_add_flag(build_cmd, "-r, --release", "Build optimized release binaries")
+    cli::cmd_add_option(build_cmd, "-o, --output", "dist", "Output directory")
+    cli::cmd_add_choice_option(build_cmd, "-t, --target", "native", ["native", "x64", "arm64"], "Target architecture")
+    cli::cmd_add_argument(build_cmd, "entrypoint", "Source file to compile", 0, "src/main.alya")
+    cli::app_add_command(app, build_cmd)
+
+    # 4. Add 'test' command
+    let test_cmd = cli::command("test", "Execute unit and integration tests", ["t"])
+    cli::cmd_add_flag(test_cmd, "-f, --fail-fast", "Abort on first test failure")
+    cli::app_add_command(app, test_cmd)
+
+    # 5. Display automated help screen
+    say "=== Automated Help Screen Demo ==="
+    say cli::help(app)
+
+    # 6. Simulate parsing realistic CLI arguments
+    say "=== Parsing Simulated Command ==="
+    let sample_args = ["build", "-v", "--release", "--target=native", "-o", "bin/release", "server.alya"]
+    say "Running with args: build -v --release --target=native -o bin/release server.alya"
+
+    let ctx = cli::parse(app, sample_args)
+    if cli::ctx_has_errors(ctx) == 1
+        say "Errors encountered during parsing:"
+        let errs = cli::ctx_get_errors(ctx)
+        let i = 0
+        while i < len(errs)
+            say "  * " + str_from_ptr(errs[i])
+            i += 1
+        end
+    else
+        say "Command executed : " + cli::ctx_get_command(ctx)
+        say "Verbose mode     : " + (cli::ctx_get_flag(ctx, "verbose") == 1 ? "yes" : "no")
+        say "Release mode     : " + (cli::ctx_get_flag(ctx, "release") == 1 ? "yes" : "no")
+        say "Target arch      : " + cli::ctx_get_option(ctx, "target", "native")
+        say "Output path      : " + cli::ctx_get_option(ctx, "output", "dist")
+        say "Source file      : " + cli::ctx_get_arg_named(ctx, "entrypoint", "src/main.alya")
+    end
 end
 
 main()

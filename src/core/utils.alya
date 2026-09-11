@@ -1,0 +1,112 @@
+# CLI Package - Utility Helpers
+
+function _cli_starts_with(s, prefix)
+    let s_str = str(s)
+    let p_str = str(prefix)
+    let slen = len(s_str)
+    let plen = len(p_str)
+    if slen < plen
+        return 0
+    end
+    if substring(s_str, 0, plen) == p_str
+        return 1
+    end
+    return 0
+end
+
+function _cli_strip_dashes(s)
+    let s_str = str(s)
+    let slen = len(s_str)
+    if _cli_starts_with(s_str, "--") == 1
+        return substring(s_str, 2, slen - 2)
+    end
+    if _cli_starts_with(s_str, "-") == 1
+        return substring(s_str, 1, slen - 1)
+    end
+    return s_str
+end
+
+function _cli_find_char(s, ch)
+    let s_str = str(s)
+    let slen = len(s_str)
+    let i = 0
+    while i < slen
+        if char_at(s_str, i) == ch
+            return i
+        end
+        i += 1
+    end
+    return -1
+end
+
+function _cli_pad_right(s, width)
+    let res = str(s)
+    let slen = len(res)
+    while slen < width
+        res = res + " "
+        slen += 1
+    end
+    return res
+end
+
+function _cli_parse_flags_spec(flags_str)
+    let s = trim(str(flags_str))
+    let short_name = ""
+    let long_name = ""
+    if contains(s, ",")
+        let parts = split(s, ",")
+        let p0 = trim(str(parts[0]))
+        let p1 = trim(str(parts[1]))
+        if _cli_starts_with(p0, "--") == 1
+            long_name = substring(p0, 2, len(p0) - 2)
+        elif _cli_starts_with(p0, "-") == 1
+            short_name = substring(p0, 1, len(p0) - 1)
+        else
+            long_name = p0
+        end
+
+        if _cli_starts_with(p1, "--") == 1
+            long_name = substring(p1, 2, len(p1) - 2)
+        elif _cli_starts_with(p1, "-") == 1
+            short_name = substring(p1, 1, len(p1) - 1)
+        else
+            long_name = p1
+        end
+    else
+        if _cli_starts_with(s, "--") == 1
+            long_name = substring(s, 2, len(s) - 2)
+        elif _cli_starts_with(s, "-") == 1
+            short_name = substring(s, 1, len(s) - 1)
+        else
+            long_name = s
+        end
+    end
+    return [short_name, long_name]
+end
+
+function _cli_str_in_array(arr, s)
+    let n = len(arr)
+    let target = str_from_ptr(s)
+    let i = 0
+    while i < n
+        if str_from_ptr(arr[i]) == target
+            return 1
+        end
+        i += 1
+    end
+    return 0
+end
+
+function _cli_join_array(arr, sep)
+    let n = len(arr)
+    if n == 0
+        return ""
+    end
+    let res = str_from_ptr(arr[0])
+    let i = 1
+    while i < n
+        res = res + sep + str_from_ptr(arr[i])
+        i += 1
+    end
+    return res
+end
