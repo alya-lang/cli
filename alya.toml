@@ -1,0 +1,13 @@
+[package]
+name = "cli"
+version = "0.1.0"
+alya-version = "0.0.6"
+entry = "src/lib.alya"
+description = "Modern command-line interface, argument parsing, flag handling, and subcommand router for Alya"
+authors = ["Alya Language Contributors <https://github.com/alya-lang>"]
+license = "MIT"
+homepage = "https://github.com/alya-lang/alya"
+repository = "https://github.com/alya-lang/cli"
+keywords = ["alya", "alya-lang", "package", "cli", "argparse", "flags", "subcommands", "terminal"]
+
+[dependencies]
