@@ -5,7 +5,6 @@ import "./types.alya"
 import "./core/utils.alya"
 import "./core/parser.alya"
 import "./core/formatter.alya"
-import "./core/compat.alya"
 
 # --- High-level Facade API ---
 

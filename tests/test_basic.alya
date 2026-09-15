@@ -8,8 +8,8 @@ function main()
 
     # 1. App creation and metadata
     let app = cli::new("test-cli", "A modern test CLI", "1.5.0")
-    runner_assert_str_eq(r, app.name, "test-cli", "app name is test-cli")
-    runner_assert_str_eq(r, app.version, "1.5.0", "app version is 1.5.0")
+    runner_assert_str_eq(r, app.app_name, "test-cli", "app name is test-cli")
+    runner_assert_str_eq(r, app.app_version, "1.5.0", "app version is 1.5.0")
 
     # 2. Adding flags and options
     cli::app_add_flag(app, "-v, --verbose", "Enable verbose mode")

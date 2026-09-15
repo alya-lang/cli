@@ -31,8 +31,6 @@ Modern, feature-rich command-line interface, argument parsing, flag validation, 
 - 📄 **Automated Help & Version**:
   - Auto-generated, column-aligned help screens for applications and subcommands
   - Automatic `-h, --help` and `-V, --version` flag handling
-- 🔄 **100% Backward Compatibility**:
-  - Drop-in replacement for the legacy `std/cli` module (`cli_parser`, `cli_add_flag`, `cli_parse`, `cli_get_option`, etc.)
 
 ---
 
@@ -47,8 +45,7 @@ cli/
 │   └── core/
 │       ├── parser.alya     # Parsing engine, flag clustering, validation logic
 │       ├── formatter.alya  # Help screen and version formatting
-│       ├── utils.alya      # String and array utilities
-│       └── compat.alya     # 100% drop-in backward compatibility for std/cli
+│       └── utils.alya      # String and array utilities
 ├── examples/
 │   └── demo.alya           # Working demonstration CLI application
 ├── tests/
@@ -56,8 +53,7 @@ cli/
 │   ├── test_flags_advanced.alya # Clustered flags, inverted flags, multi options
 │   ├── test_commands.alya       # Subcommands, aliases, command-scoped flags
 │   ├── test_validation.alya     # Choice validation, required options, errors
-│   ├── test_formatter.alya      # Help screen and version formatting tests
-│   └── test_compat.alya         # Legacy std/cli compatibility suite
+│   └── test_formatter.alya      # Help screen and version formatting tests
 └── benches/
     └── bench_basic.alya    # Micro-benchmark suite
 ```
@@ -181,26 +177,6 @@ main()
 | `cli::print_help(app, cmd = 0)` | `app, cmd = 0` | Prints formatted help screen to stdout. |
 | `cli::cli_format_version(app)` | `app` | Returns version string (e.g. `forge 1.0.0`). |
 | `cli::cli_format_errors(errors)` | `errors` | Returns newline-separated error block. |
-
----
-
-## 🔄 Legacy `std/cli` Backward Compatibility
-
-This package contains full drop-in compatibility for existing code migrating from `std/cli`:
-
-```alya
-import "cli" as cli
-
-let p = cli::cli_parser("my-app", "Legacy app description")
-cli::cli_add_flag(p, "-v, --verbose", "Verbose mode")
-cli::cli_add_option(p, "-o, --output", "dist", "Output dir")
-cli::cli_add_command(p, "run", "Execute runner")
-
-let res = cli::cli_parse(p, ["run", "-v"])
-if cli::cli_has_command(res, "run") == 1
-    say "Running with verbose=" + str(cli::cli_get_flag(res, "verbose"))
-end
-```
 
 ---
 
