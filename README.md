@@ -34,7 +34,7 @@ Modern, feature-rich command-line interface, argument parsing, flag validation, 
 
 ---
 
-## 📁 Architecture
+## 📁 Project Architecture
 
 ```
 cli/
