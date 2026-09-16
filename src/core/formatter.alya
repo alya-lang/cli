@@ -1,44 +1,43 @@
 # CLI Package - Help and Screen Formatting
+# Renders formatted help screens, version information, and error diagnostics.
 
 import "../types.alya"
 import "./utils.alya"
 
-function cli_format_help(app, cmd = 0)
+pub function cli_format_help(app, cmd = 0)
+    let is_cmd = (cmd is not null and cmd != 0)
     let out = "Usage: " + str_from_ptr(app.app_name)
-    if cmd != 0
-        out = out + " " + str_from_ptr(cmd.cmd_name)
+    if is_cmd
+        out += " " + str_from_ptr(cmd.cmd_name)
     else
         if len(app.app_commands) > 0
-            out = out + " [COMMAND]"
+            out += " [COMMAND]"
         end
     end
-    out = out + " [OPTIONS]"
+    out += " [OPTIONS]"
 
     let arg_defs = app.app_arguments
-    if cmd != 0
+    if is_cmd
         if len(cmd.cmd_arguments) > 0
             arg_defs = cmd.cmd_arguments
         end
     end
 
     if len(arg_defs) > 0
-        let ai = 0
-        while ai < len(arg_defs)
-            let adef = arg_defs[ai]
+        for adef in arg_defs
             if adef.arg_variadic == 1
-                out = out + " [" + str_from_ptr(adef.arg_name) + "...]"
+                out += " [" + str_from_ptr(adef.arg_name) + "...]"
             elif adef.arg_required == 1
-                out = out + " <" + str_from_ptr(adef.arg_name) + ">"
+                out += " <" + str_from_ptr(adef.arg_name) + ">"
             else
-                out = out + " [" + str_from_ptr(adef.arg_name) + "]"
+                out += " [" + str_from_ptr(adef.arg_name) + "]"
             end
-            ai += 1
         end
     end
-    out = out + "\n\n"
+    out += "\n\n"
 
     let desc = ""
-    if cmd != 0
+    if is_cmd
         if len(cmd.cmd_desc) > 0
             desc = str_from_ptr(cmd.cmd_desc)
         end
@@ -51,63 +50,51 @@ function cli_format_help(app, cmd = 0)
     end
 
     if len(desc) > 0
-        out = out + desc + "\n\n"
+        out += desc + "\n\n"
     end
 
     # Commands Section
-    if cmd == 0
+    if not is_cmd
         if len(app.app_commands) > 0
-            out = out + "Commands:\n"
-            let ci = 0
-            while ci < len(app.app_commands)
-                let c = app.app_commands[ci]
+            out += "Commands:\n"
+            for c in app.app_commands
                 let label = str_from_ptr(c.cmd_name)
                 if len(c.cmd_aliases) > 0
-                    label = label + ", " + _cli_join_array(c.cmd_aliases, ", ")
+                    label += ", " + _cli_join_array(c.cmd_aliases, ", ")
                 end
-                out = out + "  " + _cli_pad_right(label, 16) + " " + str_from_ptr(c.cmd_desc) + "\n"
-                ci += 1
+                out += "  " + _cli_pad_right(label, 16) + " " + str_from_ptr(c.cmd_desc) + "\n"
             end
-            out = out + "\n"
+            out += "\n"
         end
     else
         if len(cmd.cmd_subcommands) > 0
-            out = out + "Subcommands:\n"
-            let sci = 0
-            while sci < len(cmd.cmd_subcommands)
-                let sc = cmd.cmd_subcommands[sci]
+            out += "Subcommands:\n"
+            for sc in cmd.cmd_subcommands
                 let label = str_from_ptr(sc.cmd_name)
                 if len(sc.cmd_aliases) > 0
-                    label = label + ", " + _cli_join_array(sc.cmd_aliases, ", ")
+                    label += ", " + _cli_join_array(sc.cmd_aliases, ", ")
                 end
-                out = out + "  " + _cli_pad_right(label, 16) + " " + str_from_ptr(sc.cmd_desc) + "\n"
-                sci += 1
+                out += "  " + _cli_pad_right(label, 16) + " " + str_from_ptr(sc.cmd_desc) + "\n"
             end
-            out = out + "\n"
+            out += "\n"
         end
     end
 
     # Options Section
     let opts = app.app_options
-    if cmd != 0
+    if is_cmd
         let pool = []
-        let p1 = 0
-        while p1 < len(app.app_options)
-            pool.push(app.app_options[p1])
-            p1 += 1
+        for p1_opt in app.app_options
+            pool.push(p1_opt)
         end
-        let p2 = 0
-        while p2 < len(cmd.cmd_options)
-            pool.push(cmd.cmd_options[p2])
-            p2 += 1
+        for p2_opt in cmd.cmd_options
+            pool.push(p2_opt)
         end
         opts = pool
     end
 
-    out = out + "Options:\n"
-    let oi = 0
-    while oi < len(opts)
-        let opt = opts[oi]
+    out += "Options:\n"
+    for opt in opts
         let s = str_from_ptr(opt.opt_short)
         let l = str_from_ptr(opt.opt_long)
         let d = str_from_ptr(opt.opt_desc)
@@ -126,58 +113,61 @@ function cli_format_help(app, cmd = 0)
         end
 
         if opt.opt_is_flag == 0
-            label = label + " <value>"
+            label += " <value>"
         end
 
         let line = "  " + _cli_pad_right(label, 26) + " " + d
         if opt.opt_is_flag == 0
             if len(def) > 0
-                line = line + " (default: " + def + ")"
+                line += " (default: " + def + ")"
             end
         end
         if opt.opt_required == 1
-            line = line + " (required)"
+            line += " (required)"
         end
         if len(opt.opt_choices) > 0
-            line = line + " [choices: " + _cli_join_array(opt.opt_choices, ", ") + "]"
+            line += " [choices: " + _cli_join_array(opt.opt_choices, ", ") + "]"
         end
-        out = out + line + "\n"
-        oi += 1
+        out += line + "\n"
     end
-    out = out + "  -h, --help                 Show help information\n"
-    out = out + "  -V, --version              Show version information\n"
+    out += "  -h, --help                 Show help information\n"
+    out += "  -V, --version              Show version information\n"
 
     # Positional Arguments Section
     if len(arg_defs) > 0
-        out = out + "\nArguments:\n"
-        let ai2 = 0
-        while ai2 < len(arg_defs)
-            let adef = arg_defs[ai2]
+        out += "\nArguments:\n"
+        for adef in arg_defs
             let alabel = "<" + str_from_ptr(adef.arg_name) + ">"
             let aline = "  " + _cli_pad_right(alabel, 26) + " " + str_from_ptr(adef.arg_desc)
             if adef.arg_required == 1
-                aline = aline + " (required)"
+                aline += " (required)"
             elif len(adef.arg_default) > 0
-                aline = aline + " (default: " + str_from_ptr(adef.arg_default) + ")"
+                aline += " (default: " + str_from_ptr(adef.arg_default) + ")"
             end
-            out = out + aline + "\n"
-            ai2 += 1
+            out += aline + "\n"
         end
     end
 
     return out
 end
 
-function cli_format_version(app)
+pub function cli_format_version(app)
     return str_from_ptr(app.app_name) + " " + str_from_ptr(app.app_version)
 end
 
-function cli_format_errors(errors)
+pub function cli_format_errors(errors)
     let out = ""
-    let i = 0
-    while i < len(errors)
-        out = out + "Error: " + str_from_ptr(errors[i]) + "\n"
-        i += 1
+    for err in errors
+        out += "Error: " + str_from_ptr(err) + "\n"
     end
     return out
+end
+
+# CliApp formatting struct methods
+pub function CliApp.format_help(self, cmd = 0)
+    return cli_format_help(self, cmd)
+end
+
+pub function CliApp.format_version(self)
+    return cli_format_version(self)
 end

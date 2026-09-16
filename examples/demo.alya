@@ -33,22 +33,19 @@ function main()
     let sample_args = ["build", "-v", "--release", "--target=native", "-o", "bin/release", "server.alya"]
     say "Running with args: build -v --release --target=native -o bin/release server.alya"
 
-    let ctx = cli::parse(app, sample_args)
-    if cli::ctx_has_errors(ctx) == 1
+    let ctx = app.run(sample_args)
+    if ctx.has_errors()
         say "Errors encountered during parsing:"
-        let errs = cli::ctx_get_errors(ctx)
-        let i = 0
-        while i < len(errs)
-            say "  * " + str_from_ptr(errs[i])
-            i += 1
+        for err in ctx.errors()
+            say "  * " + str_from_ptr(err)
         end
     else
-        say "Command executed : " + cli::ctx_get_command(ctx)
-        say "Verbose mode     : " + (cli::ctx_get_flag(ctx, "verbose") == 1 ? "yes" : "no")
-        say "Release mode     : " + (cli::ctx_get_flag(ctx, "release") == 1 ? "yes" : "no")
-        say "Target arch      : " + cli::ctx_get_option(ctx, "target", "native")
-        say "Output path      : " + cli::ctx_get_option(ctx, "output", "dist")
-        say "Source file      : " + cli::ctx_get_arg_named(ctx, "entrypoint", "src/main.alya")
+        say "Command executed : " + ctx.command()
+        say "Verbose mode     : " + (ctx.flag("verbose") == 1 ? "yes" : "no")
+        say "Release mode     : " + (ctx.flag("release") == 1 ? "yes" : "no")
+        say "Target arch      : " + ctx.option("target", "native")
+        say "Output path      : " + ctx.option("output", "dist")
+        say "Source file      : " + ctx.get_arg_named("entrypoint", "src/main.alya")
     end
 end
 

@@ -51,6 +51,18 @@ function main()
     runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 1), "-o", "second raw arg preserved")
     runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 2), "file.txt", "third raw arg preserved")
 
+    # 6. v0.0.18 Struct Methods and Enums
+    runner_assert_eq(r, cli::OptionArity.Flag, 0, "OptionArity.Flag is 0")
+    runner_assert_eq(r, cli::CommandType.Root, 0, "CommandType.Root is 0")
+
+    let app4 = cli::new("fluent-cli", "Fluent API test", "2.0.0")
+    app4.flag("-x, --execute", "Execute immediately")
+    app4.option("-t, --tag", "latest", "Docker tag")
+
+    let ctx4 = app4.run(["-x", "--tag=v1.2"])
+    runner_assert_eq(r, ctx4.flag("execute"), 1, "ctx4.flag struct method works")
+    runner_assert_str_eq(r, ctx4.option("tag"), "v1.2", "ctx4.option struct method works")
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

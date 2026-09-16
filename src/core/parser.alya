@@ -4,29 +4,31 @@
 import "../types.alya"
 import "./utils.alya"
 
-function app_new(name, description = "", version = "1.0.0")
+# --- Public Constructors & Mutators ---
+
+pub function app_new(name, description = "", version = "1.0.0")
     return CliApp(name, description, version, "", [], [], [])
 end
 
-function app_get_name(app)
+pub function app_get_name(app)
     return str_from_ptr(app.app_name)
 end
 
-function app_get_version(app)
+pub function app_get_version(app)
     return str_from_ptr(app.app_version)
 end
 
-function app_set_author(app, author)
+pub function app_set_author(app, author)
     app.app_author = author
     return app
 end
 
-function app_set_version(app, version)
+pub function app_set_version(app, version)
     app.app_version = version
     return app
 end
 
-function app_add_flag(app, flags_spec, description = "")
+pub function app_add_flag(app, flags_spec, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -36,7 +38,7 @@ function app_add_flag(app, flags_spec, description = "")
     return app
 end
 
-function app_add_option(app, flags_spec, default_val = "", description = "")
+pub function app_add_option(app, flags_spec, default_val = "", description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -46,7 +48,7 @@ function app_add_option(app, flags_spec, default_val = "", description = "")
     return app
 end
 
-function app_add_multi_option(app, flags_spec, description = "")
+pub function app_add_multi_option(app, flags_spec, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -56,7 +58,7 @@ function app_add_multi_option(app, flags_spec, description = "")
     return app
 end
 
-function app_add_choice_option(app, flags_spec, default_val, choices, description = "")
+pub function app_add_choice_option(app, flags_spec, default_val, choices, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -66,7 +68,7 @@ function app_add_choice_option(app, flags_spec, default_val, choices, descriptio
     return app
 end
 
-function app_add_required_option(app, flags_spec, description = "")
+pub function app_add_required_option(app, flags_spec, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -76,21 +78,21 @@ function app_add_required_option(app, flags_spec, description = "")
     return app
 end
 
-function app_add_argument(app, name, description = "", required = 0, default_val = "")
+pub function app_add_argument(app, name, description = "", required = 0, default_val = "")
     let arg = CliArgument(name, description, required, default_val, 0)
     let args_list = app.app_arguments
     args_list.push(arg)
     return app
 end
 
-function app_add_variadic_argument(app, name, description = "")
+pub function app_add_variadic_argument(app, name, description = "")
     let arg = CliArgument(name, description, 0, "", 1)
     let args_list = app.app_arguments
     args_list.push(arg)
     return app
 end
 
-function app_add_command(app, cmd)
+pub function app_add_command(app, cmd)
     let cmds = app.app_commands
     cmds.push(cmd)
     return app
@@ -98,15 +100,15 @@ end
 
 # --- Subcommand Constructors & Modifiers ---
 
-function cmd_new(name, description = "", aliases = [])
+pub function cmd_new(name, description = "", aliases = [])
     return CliCommand(name, aliases, description, [], [], [])
 end
 
-function cmd_get_name(cmd)
+pub function cmd_get_name(cmd)
     return str_from_ptr(cmd.cmd_name)
 end
 
-function cmd_add_flag(cmd, flags_spec, description = "")
+pub function cmd_add_flag(cmd, flags_spec, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -116,7 +118,7 @@ function cmd_add_flag(cmd, flags_spec, description = "")
     return cmd
 end
 
-function cmd_add_option(cmd, flags_spec, default_val = "", description = "")
+pub function cmd_add_option(cmd, flags_spec, default_val = "", description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -126,7 +128,7 @@ function cmd_add_option(cmd, flags_spec, default_val = "", description = "")
     return cmd
 end
 
-function cmd_add_multi_option(cmd, flags_spec, description = "")
+pub function cmd_add_multi_option(cmd, flags_spec, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -136,7 +138,7 @@ function cmd_add_multi_option(cmd, flags_spec, description = "")
     return cmd
 end
 
-function cmd_add_choice_option(cmd, flags_spec, default_val, choices, description = "")
+pub function cmd_add_choice_option(cmd, flags_spec, default_val, choices, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -146,7 +148,7 @@ function cmd_add_choice_option(cmd, flags_spec, default_val, choices, descriptio
     return cmd
 end
 
-function cmd_add_required_option(cmd, flags_spec, description = "")
+pub function cmd_add_required_option(cmd, flags_spec, description = "")
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
@@ -156,55 +158,47 @@ function cmd_add_required_option(cmd, flags_spec, description = "")
     return cmd
 end
 
-function cmd_add_argument(cmd, name, description = "", required = 0, default_val = "")
+pub function cmd_add_argument(cmd, name, description = "", required = 0, default_val = "")
     let arg = CliArgument(name, description, required, default_val, 0)
     let args_list = cmd.cmd_arguments
     args_list.push(arg)
     return cmd
 end
 
-function cmd_add_variadic_argument(cmd, name, description = "")
+pub function cmd_add_variadic_argument(cmd, name, description = "")
     let arg = CliArgument(name, description, 0, "", 1)
     let args_list = cmd.cmd_arguments
     args_list.push(arg)
     return cmd
 end
 
-function cmd_add_subcommand(parent_cmd, sub_cmd)
+pub function cmd_add_subcommand(parent_cmd, sub_cmd)
     let subs = parent_cmd.cmd_subcommands
     subs.push(sub_cmd)
     return parent_cmd
 end
 
-# --- Lookup Helpers ---
+# --- Lookup Helpers (Internal) ---
 
 function _cli_lookup_opt_in_list(opt_list, name)
     let clean = _cli_strip_dashes(name)
-    let count = len(opt_list)
-    let i = 0
-    while i < count
-        let opt = opt_list[i]
+    for opt in opt_list
         let s = str_from_ptr(opt.opt_short)
         let l = str_from_ptr(opt.opt_long)
-        if len(s) > 0
-            if s == clean
-                return opt
-            end
+        if len(s) > 0 and s == clean
+            return opt
         end
-        if len(l) > 0
-            if l == clean
-                return opt
-            end
+        if len(l) > 0 and l == clean
+            return opt
         end
-        i += 1
     end
-    return 0
+    return null
 end
 
 function _cli_lookup_opt(app, active_cmd, name)
-    if active_cmd != 0
+    if active_cmd is not null and active_cmd != 0
         let match = _cli_lookup_opt_in_list(active_cmd.cmd_options, name)
-        if match != 0
+        if match is not null and match != 0
             return match
         end
     end
@@ -213,26 +207,19 @@ end
 
 function _cli_lookup_cmd(commands, name)
     let target = str_from_ptr(name)
-    let count = len(commands)
-    let i = 0
-    while i < count
-        let c = commands[i]
+    for c in commands
         if str_from_ptr(c.cmd_name) == target
             return c
         end
-        if _cli_str_in_array(c.cmd_aliases, target) == 1
+        if target in c.cmd_aliases
             return c
         end
-        i += 1
     end
-    return 0
+    return null
 end
 
 function _cli_populate_defaults(opt_list, flags, options, array_options)
-    let count = len(opt_list)
-    let i = 0
-    while i < count
-        let opt = opt_list[i]
+    for opt in opt_list
         let s = str_from_ptr(opt.opt_short)
         let l = str_from_ptr(opt.opt_long)
         let def_val = str_from_ptr(opt.opt_default)
@@ -260,13 +247,12 @@ function _cli_populate_defaults(opt_list, flags, options, array_options)
                 end
             end
         end
-        i += 1
     end
 end
 
 # --- Parsing Engine ---
 
-function app_parse(app, raw_args)
+pub function app_parse(app, raw_args)
     let flags = {}
     let options = {}
     let array_options = {}
@@ -274,7 +260,7 @@ function app_parse(app, raw_args)
     let arg_map = {}
     let errors = []
     let command_name = ""
-    let active_cmd = 0
+    let active_cmd = null
     let help_req = 0
     let version_req = 0
 
@@ -295,263 +281,258 @@ function app_parse(app, raw_args)
         elif arg_str == "--"
             stop_options = 1
             idx += 1
-        elif arg_str == "-h" or arg_str == "--help"
-            help_req = 1
-            flags["help"] = 1
-            flags["h"] = 1
-            idx += 1
-        elif arg_str == "-V" or arg_str == "--version"
-            version_req = 1
-            flags["version"] = 1
-            flags["V"] = 1
-            idx += 1
-        elif _cli_starts_with(arg_str, "--no-") == 1
-            # Inverted flag: --no-cache => cache=0, no-cache=1
-            let positive_name = substring(arg_str, 5, arg_len - 5)
-            flags[positive_name] = 0
-            flags["no-" + positive_name] = 1
-            idx += 1
-        elif _cli_starts_with(arg_str, "--") == 1
-            # Long option or flag
-            let eq_pos = _cli_find_char(arg_str, "=")
-            if eq_pos != -1
-                let raw_k = substring(arg_str, 2, eq_pos - 2)
-                let val = substring(arg_str, eq_pos + 1, arg_len - (eq_pos + 1))
-                let opt_match = _cli_lookup_opt(app, active_cmd, raw_k)
-                if opt_match != 0
-                    let s_name = str_from_ptr(opt_match.opt_short)
-                    if opt_match.opt_is_multi == 1
-                        if has(array_options, raw_k) == 0
-                            array_options[raw_k] = []
-                        end
-                        let arr_ref = array_options[raw_k]
-                        arr_ref.push(val)
-                        if len(s_name) > 0
-                            if has(array_options, s_name) == 0
-                                array_options[s_name] = []
-                            end
-                            let arr_ref_s = array_options[s_name]
-                            arr_ref_s.push(val)
-                        end
-                    else
-                        options[raw_k] = val
-                        if len(s_name) > 0
-                            options[s_name] = val
-                        end
-                    end
+        else
+            when arg_str
+                is "-h", "--help" then
+                    help_req = 1
+                    flags["help"] = 1
+                    flags["h"] = 1
+                    idx += 1
+                is "-V", "--version" then
+                    version_req = 1
+                    flags["version"] = 1
+                    flags["V"] = 1
+                    idx += 1
                 else
-                    options[raw_k] = val
-                end
-            else
-                let raw_k = substring(arg_str, 2, arg_len - 2)
-                let opt_match = _cli_lookup_opt(app, active_cmd, raw_k)
-                if opt_match != 0
-                    let s_name = str_from_ptr(opt_match.opt_short)
-                    if opt_match.opt_is_flag == 1
-                        flags[raw_k] = 1
-                        if len(s_name) > 0
-                            flags[s_name] = 1
-                        end
-                    else
-                        if idx + 1 < num_raw
-                            idx += 1
-                            let val = str_from_ptr(raw_args[idx])
-                            if opt_match.opt_is_multi == 1
-                                if has(array_options, raw_k) == 0
-                                    array_options[raw_k] = []
-                                end
-                                let arr_ref = array_options[raw_k]
-                                arr_ref.push(val)
-                                if len(s_name) > 0
-                                    if has(array_options, s_name) == 0
-                                        array_options[s_name] = []
+                    if _cli_starts_with(arg_str, "--no-") == 1
+                        # Inverted flag: --no-cache => cache=0, no-cache=1
+                        let positive_name = arg_str[5..arg_len]
+                        flags[positive_name] = 0
+                        flags["no-" + positive_name] = 1
+                        idx += 1
+                    elif _cli_starts_with(arg_str, "--") == 1
+                        # Long option or flag
+                        let eq_pos = _cli_find_char(arg_str, "=")
+                        if eq_pos != -1
+                            let raw_k = arg_str[2..eq_pos]
+                            let val = arg_str[(eq_pos + 1)..arg_len]
+                            let opt_match = _cli_lookup_opt(app, active_cmd, raw_k)
+                            if opt_match is not null and opt_match != 0
+                                let s_name = str_from_ptr(opt_match.opt_short)
+                                if opt_match.opt_is_multi == 1
+                                    if raw_k not in array_options
+                                        array_options[raw_k] = []
                                     end
-                                    let arr_ref_s = array_options[s_name]
-                                    arr_ref_s.push(val)
+                                    let arr_ref = array_options[raw_k]
+                                    arr_ref.push(val)
+                                    if len(s_name) > 0
+                                        if s_name not in array_options
+                                            array_options[s_name] = []
+                                        end
+                                        let arr_ref_s = array_options[s_name]
+                                        arr_ref_s.push(val)
+                                    end
+                                else
+                                    options[raw_k] = val
+                                    if len(s_name) > 0
+                                        options[s_name] = val
+                                    end
                                 end
                             else
                                 options[raw_k] = val
-                                if len(s_name) > 0
-                                    options[s_name] = val
-                                end
                             end
                         else
-                            errors.push("Missing value for option: --" + raw_k)
-                        end
-                    end
-                else
-                    flags[raw_k] = 1
-                end
-            end
-            idx += 1
-        elif _cli_starts_with(arg_str, "-") == 1 and arg_str != "-"
-            # Short flag(s) or option
-            if arg_len == 2
-                let s_char = substring(arg_str, 1, 1)
-                let opt_match = _cli_lookup_opt(app, active_cmd, s_char)
-                if opt_match != 0
-                    let l_name = str_from_ptr(opt_match.opt_long)
-                    if opt_match.opt_is_flag == 1
-                        flags[s_char] = 1
-                        if len(l_name) > 0
-                            flags[l_name] = 1
-                        end
-                    else
-                        if idx + 1 < num_raw
-                            idx += 1
-                            let val = str_from_ptr(raw_args[idx])
-                            if opt_match.opt_is_multi == 1
-                                if has(array_options, s_char) == 0
-                                    array_options[s_char] = []
-                                end
-                                let arr_ref = array_options[s_char]
-                                arr_ref.push(val)
-                                if len(l_name) > 0
-                                    if has(array_options, l_name) == 0
-                                        array_options[l_name] = []
+                            let raw_k = arg_str[2..arg_len]
+                            let opt_match = _cli_lookup_opt(app, active_cmd, raw_k)
+                            if opt_match is not null and opt_match != 0
+                                let s_name = str_from_ptr(opt_match.opt_short)
+                                if opt_match.opt_is_flag == 1
+                                    flags[raw_k] = 1
+                                    if len(s_name) > 0
+                                        flags[s_name] = 1
                                     end
-                                    let arr_ref_l = array_options[l_name]
-                                    arr_ref_l.push(val)
+                                else
+                                    if idx + 1 < num_raw
+                                        idx += 1
+                                        let val = str_from_ptr(raw_args[idx])
+                                        if opt_match.opt_is_multi == 1
+                                            if raw_k not in array_options
+                                                array_options[raw_k] = []
+                                            end
+                                            let arr_ref = array_options[raw_k]
+                                            arr_ref.push(val)
+                                            if len(s_name) > 0
+                                                if s_name not in array_options
+                                                    array_options[s_name] = []
+                                                end
+                                                let arr_ref_s = array_options[s_name]
+                                                arr_ref_s.push(val)
+                                            end
+                                        else
+                                            options[raw_k] = val
+                                            if len(s_name) > 0
+                                                options[s_name] = val
+                                            end
+                                        end
+                                    else
+                                        errors.push("Missing value for option: --" + raw_k)
+                                    end
                                 end
                             else
-                                options[s_char] = val
-                                if len(l_name) > 0
-                                    options[l_name] = val
+                                flags[raw_k] = 1
+                            end
+                        end
+                        idx += 1
+                    elif _cli_starts_with(arg_str, "-") == 1 and arg_str != "-"
+                        # Short flag(s) or option
+                        if arg_len == 2
+                            let s_char = arg_str[1..2]
+                            let opt_match = _cli_lookup_opt(app, active_cmd, s_char)
+                            if opt_match is not null and opt_match != 0
+                                let l_name = str_from_ptr(opt_match.opt_long)
+                                if opt_match.opt_is_flag == 1
+                                    flags[s_char] = 1
+                                    if len(l_name) > 0
+                                        flags[l_name] = 1
+                                    end
+                                else
+                                    if idx + 1 < num_raw
+                                        idx += 1
+                                        let val = str_from_ptr(raw_args[idx])
+                                        if opt_match.opt_is_multi == 1
+                                            if s_char not in array_options
+                                                array_options[s_char] = []
+                                            end
+                                            let arr_ref = array_options[s_char]
+                                            arr_ref.push(val)
+                                            if len(l_name) > 0
+                                                if l_name not in array_options
+                                                    array_options[l_name] = []
+                                                end
+                                                let arr_ref_l = array_options[l_name]
+                                                arr_ref_l.push(val)
+                                            end
+                                        else
+                                            options[s_char] = val
+                                            if len(l_name) > 0
+                                                options[l_name] = val
+                                            end
+                                        end
+                                    else
+                                        errors.push("Missing value for option: -" + s_char)
+                                    end
+                                end
+                            else
+                                flags[s_char] = 1
+                            end
+                        else
+                            # Length > 2: e.g. clustered flags -abc or attached option -oValue
+                            let first_char = arg_str[1..2]
+                            let first_match = _cli_lookup_opt(app, active_cmd, first_char)
+                            let is_attached = 0
+                            if first_match is not null and first_match != 0
+                                if first_match.opt_is_flag == 0
+                                    is_attached = 1
+                                end
+                            end
+
+                            if is_attached == 1
+                                # Attached value: -oValue
+                                let val = arg_str[2..arg_len]
+                                let l_name = str_from_ptr(first_match.opt_long)
+                                if first_match.opt_is_multi == 1
+                                    if first_char not in array_options
+                                        array_options[first_char] = []
+                                    end
+                                    let arr_ref = array_options[first_char]
+                                    arr_ref.push(val)
+                                    if len(l_name) > 0
+                                        if l_name not in array_options
+                                            array_options[l_name] = []
+                                        end
+                                        let arr_ref_l = array_options[l_name]
+                                        arr_ref_l.push(val)
+                                    end
+                                else
+                                    options[first_char] = val
+                                    if len(l_name) > 0
+                                        options[l_name] = val
+                                    end
+                                end
+                            else
+                                # Clustered flags: -abc
+                                let c_idx = 1
+                                while c_idx < arg_len
+                                    let ch = arg_str[c_idx..(c_idx + 1)]
+                                    flags[ch] = 1
+                                    let m = _cli_lookup_opt(app, active_cmd, ch)
+                                    if m is not null and m != 0
+                                        let lg = str_from_ptr(m.opt_long)
+                                        if len(lg) > 0
+                                            flags[lg] = 1
+                                        end
+                                    end
+                                    c_idx += 1
+                                end
+                            end
+                        end
+                        idx += 1
+                    else
+                        # Positional argument or subcommand
+                        let matched_sub = 0
+                        if active_cmd is null or active_cmd == 0
+                            if len(app.app_commands) > 0
+                                let cmd_match = _cli_lookup_cmd(app.app_commands, arg_str)
+                                if cmd_match is not null and cmd_match != 0
+                                    active_cmd = cmd_match
+                                    command_name = str_from_ptr(cmd_match.cmd_name)
+                                    _cli_populate_defaults(cmd_match.cmd_options, flags, options, array_options)
+                                    matched_sub = 1
+                                    idx += 1
                                 end
                             end
                         else
-                            errors.push("Missing value for option: -" + s_char)
-                        end
-                    end
-                else
-                    flags[s_char] = 1
-                end
-            else
-                # Length > 2: e.g. clustered flags -abc or attached option -oValue
-                let first_char = substring(arg_str, 1, 1)
-                let first_match = _cli_lookup_opt(app, active_cmd, first_char)
-                let is_attached = 0
-                if first_match != 0
-                    if first_match.opt_is_flag == 0
-                        is_attached = 1
-                    end
-                end
-
-                if is_attached == 1
-                    # Attached value: -oValue
-                    let val = substring(arg_str, 2, arg_len - 2)
-                    let l_name = str_from_ptr(first_match.opt_long)
-                    if first_match.opt_is_multi == 1
-                        if has(array_options, first_char) == 0
-                            array_options[first_char] = []
-                        end
-                        let arr_ref = array_options[first_char]
-                        arr_ref.push(val)
-                        if len(l_name) > 0
-                            if has(array_options, l_name) == 0
-                                array_options[l_name] = []
-                            end
-                            let arr_ref_l = array_options[l_name]
-                            arr_ref_l.push(val)
-                        end
-                    else
-                        options[first_char] = val
-                        if len(l_name) > 0
-                            options[l_name] = val
-                        end
-                    end
-                else
-                    # Clustered flags: -abc
-                    let c_idx = 1
-                    while c_idx < arg_len
-                        let ch = substring(arg_str, c_idx, 1)
-                        flags[ch] = 1
-                        let m = _cli_lookup_opt(app, active_cmd, ch)
-                        if m != 0
-                            let lg = str_from_ptr(m.opt_long)
-                            if len(lg) > 0
-                                flags[lg] = 1
+                            if len(active_cmd.cmd_subcommands) > 0
+                                let sub_match = _cli_lookup_cmd(active_cmd.cmd_subcommands, arg_str)
+                                if sub_match is not null and sub_match != 0
+                                    active_cmd = sub_match
+                                    command_name = command_name + " " + str_from_ptr(sub_match.cmd_name)
+                                    _cli_populate_defaults(sub_match.cmd_options, flags, options, array_options)
+                                    matched_sub = 1
+                                    idx += 1
+                                end
                             end
                         end
-                        c_idx += 1
-                    end
-                end
-            end
-            idx += 1
-        else
-            # Positional argument or subcommand
-            let matched_sub = 0
-            if active_cmd == 0
-                if len(app.app_commands) > 0
-                    let cmd_match = _cli_lookup_cmd(app.app_commands, arg_str)
-                    if cmd_match != 0
-                        active_cmd = cmd_match
-                        command_name = str_from_ptr(cmd_match.cmd_name)
-                        _cli_populate_defaults(cmd_match.cmd_options, flags, options, array_options)
-                        matched_sub = 1
-                        idx += 1
-                    end
-                end
-            else
-                if len(active_cmd.cmd_subcommands) > 0
-                    let sub_match = _cli_lookup_cmd(active_cmd.cmd_subcommands, arg_str)
-                    if sub_match != 0
-                        active_cmd = sub_match
-                        command_name = command_name + " " + str_from_ptr(sub_match.cmd_name)
-                        _cli_populate_defaults(sub_match.cmd_options, flags, options, array_options)
-                        matched_sub = 1
-                        idx += 1
-                    end
-                end
-            end
 
-            if matched_sub == 0
-                positionals.push(arg_str)
-                idx += 1
+                        if matched_sub == 0
+                            positionals.push(arg_str)
+                            idx += 1
+                        end
+                    end
             end
         end
     end
 
     # 2. Check required options and validate choices
     let opt_pool = app.app_options
-    if active_cmd != 0
+    if active_cmd is not null and active_cmd != 0
         let pool = []
-        let pi = 0
-        while pi < len(app.app_options)
-            pool.push(app.app_options[pi])
-            pi += 1
+        for opt_item in app.app_options
+            pool.push(opt_item)
         end
-        let pj = 0
-        while pj < len(active_cmd.cmd_options)
-            pool.push(active_cmd.cmd_options[pj])
-            pj += 1
+        for cmd_opt in active_cmd.cmd_options
+            pool.push(cmd_opt)
         end
         opt_pool = pool
     end
 
-    let oi = 0
-    while oi < len(opt_pool)
-        let opt = opt_pool[oi]
+    for opt in opt_pool
         let s = str_from_ptr(opt.opt_short)
         let l = str_from_ptr(opt.opt_long)
 
         # Required check
         if opt.opt_required == 1
             let has_val = 0
-            if len(l) > 0
-                if has(options, l) == 1
-                    let v = str_from_ptr(get(options, l))
-                    if len(v) > 0
-                        has_val = 1
-                    end
+            if len(l) > 0 and (l in options)
+                let v = str_from_ptr(options[l])
+                if len(v) > 0
+                    has_val = 1
                 end
             end
-            if len(s) > 0
-                if has(options, s) == 1
-                    let v = str_from_ptr(get(options, s))
-                    if len(v) > 0
-                        has_val = 1
-                    end
+            if len(s) > 0 and (s in options)
+                let v = str_from_ptr(options[s])
+                if len(v) > 0
+                    has_val = 1
                 end
             end
             if has_val == 0
@@ -562,31 +543,24 @@ function app_parse(app, raw_args)
         # Choice validation
         if len(opt.opt_choices) > 0
             let chosen_val = ""
-            if len(l) > 0
-                if has(options, l) == 1
-                    chosen_val = str_from_ptr(get(options, l))
-                end
+            if len(l) > 0 and (l in options)
+                chosen_val = str_from_ptr(options[l])
             end
-            if len(chosen_val) == 0
-                if len(s) > 0
-                    if has(options, s) == 1
-                        chosen_val = str_from_ptr(get(options, s))
-                    end
-                end
+            if len(chosen_val) == 0 and len(s) > 0 and (s in options)
+                chosen_val = str_from_ptr(options[s])
             end
             if len(chosen_val) > 0
-                if _cli_str_in_array(opt.opt_choices, chosen_val) == 0
+                if chosen_val not in opt.opt_choices
                     let allowed = _cli_join_array(opt.opt_choices, ", ")
                     errors.push("Invalid value '" + chosen_val + "' for option --" + l + ". Allowed choices: [" + allowed + "]")
                 end
             end
         end
-        oi += 1
     end
 
     # 3. Bind positional arguments
     let arg_defs = app.app_arguments
-    if active_cmd != 0
+    if active_cmd is not null and active_cmd != 0
         if len(active_cmd.cmd_arguments) > 0
             arg_defs = active_cmd.cmd_arguments
         end
@@ -625,85 +599,278 @@ function app_parse(app, raw_args)
     return CliContext(app, command_name, flags, options, array_options, positionals, arg_map, errors, help_req, version_req, raw_args)
 end
 
-function app_parse_args(app)
+pub function app_parse_args(app)
     return app_parse(app, args())
 end
 
 # --- Context Accessor Helpers ---
 
-function ctx_get_flag(ctx, name)
+pub function ctx_get_flag(ctx, name)
     let clean = _cli_strip_dashes(name)
     let fl = ctx.ctx_flags
-    if has(fl, clean) == 1
-        return get(fl, clean)
+    if clean in fl
+        return fl[clean]
     end
     return 0
 end
 
-function ctx_get_option(ctx, name, default_val = "")
+pub function ctx_get_option(ctx, name, default_val = "")
     let clean = _cli_strip_dashes(name)
     let opts = ctx.ctx_options
-    if has(opts, clean) == 1
-        return str_from_ptr(get(opts, clean))
+    if clean in opts
+        return str_from_ptr(opts[clean])
     end
     return default_val
 end
 
-function ctx_get_all(ctx, name)
+pub function ctx_get_all(ctx, name)
     let clean = _cli_strip_dashes(name)
     let aopts = ctx.ctx_array_opts
-    if has(aopts, clean) == 1
-        return get(aopts, clean)
+    if clean in aopts
+        return aopts[clean]
     end
     return []
 end
 
-function ctx_get_arg(ctx, idx, default_val = "")
+pub function ctx_get_arg(ctx, idx, default_val = "")
     let r_args = ctx.ctx_args
-    if idx >= 0
-        if idx < len(r_args)
-            return str_from_ptr(r_args[idx])
-        end
+    if idx >= 0 and idx < len(r_args)
+        return str_from_ptr(r_args[idx])
     end
     return default_val
 end
 
-function ctx_get_arg_named(ctx, name, default_val = "")
+pub function ctx_get_arg_named(ctx, name, default_val = "")
     let amap = ctx.ctx_arg_map
     let n = str_from_ptr(name)
-    if has(amap, n) == 1
-        return str_from_ptr(get(amap, n))
+    if n in amap
+        return str_from_ptr(amap[n])
     end
     return default_val
 end
 
-function ctx_get_args(ctx)
+pub function ctx_get_args(ctx)
     return ctx.ctx_args
 end
 
-function ctx_get_command(ctx)
+pub function ctx_get_command(ctx)
     return str_from_ptr(ctx.ctx_cmd_name)
 end
 
-function ctx_has_command(ctx, name)
+pub function ctx_has_command(ctx, name)
     let n = str_from_ptr(name)
     let c = str_from_ptr(ctx.ctx_cmd_name)
     return c == n
 end
 
-function ctx_has_errors(ctx)
-    let errs = ctx.ctx_errors
-    return len(errs) > 0
+pub function ctx_has_errors(ctx)
+    return len(ctx.ctx_errors) > 0
 end
 
-function ctx_get_errors(ctx)
+pub function ctx_get_errors(ctx)
     return ctx.ctx_errors
 end
 
-function ctx_help_requested(ctx)
+pub function ctx_help_requested(ctx)
     return ctx.ctx_help_req
 end
 
-function ctx_version_requested(ctx)
+pub function ctx_version_requested(ctx)
     return ctx.ctx_version_req
+end
+
+# --- Struct Methods (Alya v0.0.18) ---
+
+# CliApp methods
+pub function CliApp.set_author(self, author)
+    return app_set_author(self, author)
+end
+
+pub function CliApp.set_version(self, version)
+    return app_set_version(self, version)
+end
+
+pub function CliApp.add_flag(self, flags_spec, description = "")
+    return app_add_flag(self, flags_spec, description)
+end
+
+pub function CliApp.flag(self, flags_spec, description = "")
+    return app_add_flag(self, flags_spec, description)
+end
+
+pub function CliApp.add_option(self, flags_spec, default_val = "", description = "")
+    return app_add_option(self, flags_spec, default_val, description)
+end
+
+pub function CliApp.option(self, flags_spec, default_val = "", description = "")
+    return app_add_option(self, flags_spec, default_val, description)
+end
+
+pub function CliApp.add_multi_option(self, flags_spec, description = "")
+    return app_add_multi_option(self, flags_spec, description)
+end
+
+pub function CliApp.add_choice_option(self, flags_spec, default_val, choices, description = "")
+    return app_add_choice_option(self, flags_spec, default_val, choices, description)
+end
+
+pub function CliApp.add_required_option(self, flags_spec, description = "")
+    return app_add_required_option(self, flags_spec, description)
+end
+
+pub function CliApp.add_argument(self, name, description = "", required = 0, default_val = "")
+    return app_add_argument(self, name, description, required, default_val)
+end
+
+pub function CliApp.argument(self, name, description = "", required = 0, default_val = "")
+    return app_add_argument(self, name, description, required, default_val)
+end
+
+pub function CliApp.add_variadic_argument(self, name, description = "")
+    return app_add_variadic_argument(self, name, description)
+end
+
+pub function CliApp.add_command(self, cmd)
+    return app_add_command(self, cmd)
+end
+
+pub function CliApp.command(self, cmd)
+    return app_add_command(self, cmd)
+end
+
+pub function CliApp.parse(self, raw_args)
+    return app_parse(self, raw_args)
+end
+
+pub function CliApp.run(self, raw_args = null)
+    if raw_args is null
+        return app_parse_args(self)
+    end
+    return app_parse(self, raw_args)
+end
+
+# CliCommand methods
+pub function CliCommand.add_flag(self, flags_spec, description = "")
+    return cmd_add_flag(self, flags_spec, description)
+end
+
+pub function CliCommand.flag(self, flags_spec, description = "")
+    return cmd_add_flag(self, flags_spec, description)
+end
+
+pub function CliCommand.add_option(self, flags_spec, default_val = "", description = "")
+    return cmd_add_option(self, flags_spec, default_val, description)
+end
+
+pub function CliCommand.option(self, flags_spec, default_val = "", description = "")
+    return cmd_add_option(self, flags_spec, default_val, description)
+end
+
+pub function CliCommand.add_multi_option(self, flags_spec, description = "")
+    return cmd_add_multi_option(self, flags_spec, description)
+end
+
+pub function CliCommand.add_choice_option(self, flags_spec, default_val, choices, description = "")
+    return cmd_add_choice_option(self, flags_spec, default_val, choices, description)
+end
+
+pub function CliCommand.add_required_option(self, flags_spec, description = "")
+    return cmd_add_required_option(self, flags_spec, description)
+end
+
+pub function CliCommand.add_argument(self, name, description = "", required = 0, default_val = "")
+    return cmd_add_argument(self, name, description, required, default_val)
+end
+
+pub function CliCommand.argument(self, name, description = "", required = 0, default_val = "")
+    return cmd_add_argument(self, name, description, required, default_val)
+end
+
+pub function CliCommand.add_variadic_argument(self, name, description = "")
+    return cmd_add_variadic_argument(self, name, description)
+end
+
+pub function CliCommand.add_subcommand(self, sub_cmd)
+    return cmd_add_subcommand(self, sub_cmd)
+end
+
+pub function CliCommand.subcommand(self, sub_cmd)
+    return cmd_add_subcommand(self, sub_cmd)
+end
+
+# CliContext methods
+pub function CliContext.get_flag(self, name)
+    return ctx_get_flag(self, name)
+end
+
+pub function CliContext.flag(self, name)
+    return ctx_get_flag(self, name)
+end
+
+pub function CliContext.get_option(self, name, default_val = "")
+    return ctx_get_option(self, name, default_val)
+end
+
+pub function CliContext.option(self, name, default_val = "")
+    return ctx_get_option(self, name, default_val)
+end
+
+pub function CliContext.get_all(self, name)
+    return ctx_get_all(self, name)
+end
+
+pub function CliContext.all(self, name)
+    return ctx_get_all(self, name)
+end
+
+pub function CliContext.get_arg(self, idx, default_val = "")
+    return ctx_get_arg(self, idx, default_val)
+end
+
+pub function CliContext.arg(self, idx, default_val = "")
+    return ctx_get_arg(self, idx, default_val)
+end
+
+pub function CliContext.get_arg_named(self, name, default_val = "")
+    return ctx_get_arg_named(self, name, default_val)
+end
+
+pub function CliContext.get_args(self)
+    return ctx_get_args(self)
+end
+
+pub function CliContext.args(self)
+    return ctx_get_args(self)
+end
+
+pub function CliContext.get_command(self)
+    return ctx_get_command(self)
+end
+
+pub function CliContext.command(self)
+    return ctx_get_command(self)
+end
+
+pub function CliContext.has_command(self, name)
+    return ctx_has_command(self, name)
+end
+
+pub function CliContext.has_errors(self)
+    return ctx_has_errors(self)
+end
+
+pub function CliContext.get_errors(self)
+    return ctx_get_errors(self)
+end
+
+pub function CliContext.errors(self)
+    return ctx_get_errors(self)
+end
+
+pub function CliContext.help_requested(self)
+    return ctx_help_requested(self)
+end
+
+pub function CliContext.version_requested(self)
+    return ctx_version_requested(self)
 end

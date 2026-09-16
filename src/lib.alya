@@ -8,30 +8,30 @@ import "./core/formatter.alya"
 
 # --- High-level Facade API ---
 
-function new(name, description = "", version = "1.0.0")
+pub function new(name, description = "", version = "1.0.0")
     return app_new(name, description, version)
 end
 
-function command(name, description = "", aliases = [])
+pub function command(name, description = "", aliases = [])
     return cmd_new(name, description, aliases)
 end
 
-function parse(app, raw_args)
+pub function parse(app, raw_args)
     return app_parse(app, raw_args)
 end
 
-function parse_args(app)
+pub function parse_args(app)
     return app_parse_args(app)
 end
 
-function help(app, cmd = 0)
+pub function help(app, cmd = 0)
     return cli_format_help(app, cmd)
 end
 
-function print_help(app, cmd = 0)
+pub function print_help(app, cmd = 0)
     say cli_format_help(app, cmd)
 end
 
-function print_version(app)
+pub function print_version(app)
     say cli_format_version(app)
 end

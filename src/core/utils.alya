@@ -1,4 +1,5 @@
 # CLI Package - Utility Helpers
+# Private helpers internal to the cli package
 
 function _cli_starts_with(s, prefix)
     let s_str = str(s)
@@ -8,7 +9,7 @@ function _cli_starts_with(s, prefix)
     if slen < plen
         return 0
     end
-    if substring(s_str, 0, plen) == p_str
+    if s_str[0..plen] == p_str
         return 1
     end
     return 0
@@ -18,10 +19,10 @@ function _cli_strip_dashes(s)
     let s_str = str(s)
     let slen = len(s_str)
     if _cli_starts_with(s_str, "--") == 1
-        return substring(s_str, 2, slen - 2)
+        return s_str[2..slen]
     end
     if _cli_starts_with(s_str, "-") == 1
-        return substring(s_str, 1, slen - 1)
+        return s_str[1..slen]
     end
     return s_str
 end
@@ -43,7 +44,7 @@ function _cli_pad_right(s, width)
     let res = str(s)
     let slen = len(res)
     while slen < width
-        res = res + " "
+        res += " "
         slen += 1
     end
     return res
@@ -58,25 +59,25 @@ function _cli_parse_flags_spec(flags_str)
         let p0 = trim(str(parts[0]))
         let p1 = trim(str(parts[1]))
         if _cli_starts_with(p0, "--") == 1
-            long_name = substring(p0, 2, len(p0) - 2)
+            long_name = p0[2..len(p0)]
         elif _cli_starts_with(p0, "-") == 1
-            short_name = substring(p0, 1, len(p0) - 1)
+            short_name = p0[1..len(p0)]
         else
             long_name = p0
         end
 
         if _cli_starts_with(p1, "--") == 1
-            long_name = substring(p1, 2, len(p1) - 2)
+            long_name = p1[2..len(p1)]
         elif _cli_starts_with(p1, "-") == 1
-            short_name = substring(p1, 1, len(p1) - 1)
+            short_name = p1[1..len(p1)]
         else
             long_name = p1
         end
     else
         if _cli_starts_with(s, "--") == 1
-            long_name = substring(s, 2, len(s) - 2)
+            long_name = s[2..len(s)]
         elif _cli_starts_with(s, "-") == 1
-            short_name = substring(s, 1, len(s) - 1)
+            short_name = s[1..len(s)]
         else
             long_name = s
         end
@@ -85,16 +86,8 @@ function _cli_parse_flags_spec(flags_str)
 end
 
 function _cli_str_in_array(arr, s)
-    let n = len(arr)
     let target = str_from_ptr(s)
-    let i = 0
-    while i < n
-        if str_from_ptr(arr[i]) == target
-            return 1
-        end
-        i += 1
-    end
-    return 0
+    return (target in arr) ? 1 : 0
 end
 
 function _cli_join_array(arr, sep)
@@ -105,7 +98,7 @@ function _cli_join_array(arr, sep)
     let res = str_from_ptr(arr[0])
     let i = 1
     while i < n
-        res = res + sep + str_from_ptr(arr[i])
+        res += sep + str_from_ptr(arr[i])
         i += 1
     end
     return res

@@ -1,7 +1,20 @@
 # CLI Package - Type Definitions
 # Defines options, arguments, commands, applications, and parsing contexts.
 
-struct CliOption
+# Public enumeration for option arity
+pub enum OptionArity
+    Flag = 0
+    Single = 1
+    Multiple = 2
+end
+
+# Public enumeration for command type
+pub enum CommandType
+    Root = 0
+    Subcommand = 1
+end
+
+pub struct CliOption
     opt_short       # Short flag name (without dash, e.g. "v")
     opt_long        # Long flag name (without dashes, e.g. "verbose")
     opt_desc        # Description shown in help
@@ -12,7 +25,7 @@ struct CliOption
     opt_choices     # Array of allowed string values, or empty array []
 end
 
-struct CliArgument
+pub struct CliArgument
     arg_name        # Name of positional argument (e.g. "filename")
     arg_desc        # Description shown in help
     arg_required    # 1 if required, 0 if optional
@@ -20,7 +33,7 @@ struct CliArgument
     arg_variadic    # 1 if captures remaining positional arguments
 end
 
-struct CliCommand
+pub struct CliCommand
     cmd_name        # Command name (e.g. "build")
     cmd_aliases     # Array of alias strings (e.g. ["b"])
     cmd_desc        # Command description
@@ -29,7 +42,7 @@ struct CliCommand
     cmd_subcommands # Array of nested CliCommand
 end
 
-struct CliApp
+pub struct CliApp
     app_name        # Application executable name
     app_desc        # Application description
     app_version     # Semantic version string
@@ -39,7 +52,7 @@ struct CliApp
     app_commands    # Array of CliCommand
 end
 
-struct CliContext
+pub struct CliContext
     ctx_app         # Reference to CliApp
     ctx_cmd_name    # Name of active command or empty string
     ctx_flags       # Map of flag name -> 1 / 0
