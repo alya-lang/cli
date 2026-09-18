@@ -69,11 +69,11 @@ Add `cli` to your project's `alya.toml`:
 cli = { git = "https://github.com/alya-lang/cli", branch = "main" }
 ```
 
-Or install it directly with `alyac`:
+Or install it directly with `alya`:
 
 ```bash
-alyac add cli --git https://github.com/alya-lang/cli --branch main
-alyac install
+alya add cli --git https://github.com/alya-lang/cli --branch main
+alya install
 ```
 
 ---
@@ -185,19 +185,19 @@ main()
 Run the test suite:
 
 ```bash
-alyac test
+alya test
 ```
 
 Run micro-benchmarks:
 
 ```bash
-alyac run benches/bench_basic.alya
+alya run benches/bench_basic.alya
 ```
 
 Run the interactive demo:
 
 ```bash
-alyac run examples/demo.alya
+alya run examples/demo.alya
 ```
 
 ---
@@ -207,12 +207,12 @@ alyac run examples/demo.alya
 1. Fork the repository and clone locally
 2. Install dependencies:
    ```bash
-   alyac install
+   alya install
    ```
 3. Run tests and verify code formatting:
    ```bash
-   alyac test
-   alyac fmt . --check
+   alya test
+   alya fmt . --check
    ```
 4. Commit your changes and open a Pull Request
 
