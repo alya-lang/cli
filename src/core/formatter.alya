@@ -1,10 +1,29 @@
-# CLI Package - Help and Screen Formatting
-# Renders formatted help screens, version information, and error diagnostics.
+## CLI Help and Screen Formatter
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+## Renders formatted help screens, version information, and error diagnostics.
 
 import "../types.alya"
 import "./utils.alya"
 
-pub function cli_format_help(app, cmd = 0)
+## Formats the complete usage and help documentation for an application or command.
+##
+## Constructs structured sections for Usage syntax, Description, Commands/Subcommands,
+## Options, and Positional Arguments.
+##
+## ### Parameters
+## - `app`: The target `CliApp` instance.
+## - `cmd`: Optional `CliCommand` instance. If `0` or null, formats application root help.
+##
+## ### Returns
+## The formatted multi-line help string.
+##
+## ### Examples
+## ```alya
+## let help_str = cli_format_help(app)
+## say help_str
+## ```
+pub function cli_format_help(app, cmd = 0) -> string
     let is_cmd = (cmd is not null and cmd != 0)
     let out = "Usage: " + str_from_ptr(app.app_name)
     if is_cmd
@@ -151,11 +170,25 @@ pub function cli_format_help(app, cmd = 0)
     return out
 end
 
-pub function cli_format_version(app)
+## Formats the application name and semantic version string.
+##
+## ### Parameters
+## - `app`: The target `CliApp` instance.
+##
+## ### Returns
+## Formatted version string (e.g. `"mytool 1.0.0"`).
+pub function cli_format_version(app) -> string
     return str_from_ptr(app.app_name) + " " + str_from_ptr(app.app_version)
 end
 
-pub function cli_format_errors(errors)
+## Formats an array of parsing and validation error messages into a diagnostics string.
+##
+## ### Parameters
+## - `errors`: Array of error string messages.
+##
+## ### Returns
+## Formatted error diagnostics string.
+pub function cli_format_errors(errors) -> string
     let out = ""
     for err in errors
         out += "Error: " + str_from_ptr(err) + "\n"
@@ -163,11 +196,25 @@ pub function cli_format_errors(errors)
     return out
 end
 
-# CliApp formatting struct methods
-pub function CliApp.format_help(self, cmd = 0)
+## Formats help documentation for this application or subcommand.
+##
+## ### Parameters
+## - `self`: The target `CliApp` instance.
+## - `cmd`: Optional subcommand instance. Defaults to `0`.
+##
+## ### Returns
+## Formatted multi-line help string.
+pub function CliApp.format_help(self, cmd = 0) -> string
     return cli_format_help(self, cmd)
 end
 
-pub function CliApp.format_version(self)
+## Formats name and version string for this application.
+##
+## ### Parameters
+## - `self`: The target `CliApp` instance.
+##
+## ### Returns
+## Formatted version string.
+pub function CliApp.format_version(self) -> string
     return cli_format_version(self)
 end

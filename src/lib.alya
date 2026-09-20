@@ -1,37 +1,121 @@
-# CLI Package - Modern Command-Line Interface and Argparse Toolkit
-# Part of the Alya Language Ecosystem (https://github.com/alya-lang/cli)
+## cli Library Facade
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+## Modern command-line interface, argument parsing, flag handling, and subcommand router for Alya.
 
 import "./types.alya"
-import "./core/utils.alya"
 import "./core/parser.alya"
 import "./core/formatter.alya"
 
-# --- High-level Facade API ---
-
-pub function new(name, description = "", version = "1.0.0")
+## Constructs and initializes a new top-level CLI application.
+##
+## ### Parameters
+## - `name`: The executable application name (e.g. `"mytool"`).
+## - `description`: Brief description displayed in help screens. Defaults to `""`.
+## - `version`: Semantic version string. Defaults to `"1.0.0"`.
+##
+## ### Returns
+## A newly initialized `CliApp` instance ready for configuration and execution.
+##
+## ### Examples
+## ```alya
+## import "cli"
+##
+## let app = cli::new("mytool", "A high-performance build tool", "1.2.0")
+## ```
+pub function new(name: string, description: string = "", version: string = "1.0.0") -> CliApp
     return app_new(name, description, version)
 end
 
-pub function command(name, description = "", aliases = [])
+## Constructs a new subcommand model instance.
+##
+## ### Parameters
+## - `name`: The primary name of the subcommand (e.g. `"build"`).
+## - `description`: Description of what this subcommand does. Defaults to `""`.
+## - `aliases`: Shorthand alias strings (e.g. `["b"]`). Defaults to `[]`.
+##
+## ### Returns
+## A newly initialized `CliCommand` instance.
+##
+## ### Examples
+## ```alya
+## import "cli"
+##
+## let build_cmd = cli::command("build", "Compile target package", ["b"])
+## ```
+pub function command(name: string, description: string = "", aliases = []) -> CliCommand
     return cmd_new(name, description, aliases)
 end
 
-pub function parse(app, raw_args)
+## Parses an explicit array of command-line argument strings against the application specification.
+##
+## Populates flags, options, positional arguments, subcommands, and collects validation errors.
+##
+## ### Parameters
+## - `app`: The target `CliApp` configuration model.
+## - `raw_args`: Array of argument strings (typically `sys::args()` or manual array).
+##
+## ### Returns
+## A `CliContext` containing resolved values, flags, and error status.
+##
+## ### Examples
+## ```alya
+## let ctx = cli::parse(app, ["--verbose", "input.txt"])
+## if ctx.get_flag("verbose") == 1
+##     say "Verbose output enabled"
+## end
+## ```
+pub function parse(app: CliApp, raw_args) -> CliContext
     return app_parse(app, raw_args)
 end
 
-pub function parse_args(app)
+## Automatically reads and parses process arguments (`sys::args()` / `args`) into a context.
+##
+## ### Parameters
+## - `app`: The target `CliApp` configuration model.
+##
+## ### Returns
+## A `CliContext` containing parsed command-line state.
+##
+## ### Examples
+## ```alya
+## let ctx = cli::parse_args(app)
+## ```
+pub function parse_args(app: CliApp) -> CliContext
     return app_parse_args(app)
 end
 
-pub function help(app, cmd = 0)
+## Formats and returns the complete help screen text for the application or a specific command.
+##
+## ### Parameters
+## - `app`: The target `CliApp` instance.
+## - `cmd`: Optional `CliCommand` instance. If omitted or `0`, renders root application help.
+##
+## ### Returns
+## Formatted multi-line help string.
+##
+## ### Examples
+## ```alya
+## let help_text = cli::help(app)
+## say help_text
+## ```
+pub function help(app: CliApp, cmd = 0) -> string
     return cli_format_help(app, cmd)
 end
 
-pub function print_help(app, cmd = 0)
+## Prints the formatted help screen directly to standard output.
+##
+## ### Parameters
+## - `app`: The target `CliApp` instance.
+## - `cmd`: Optional `CliCommand` instance. Defaults to `0` (root help).
+pub function print_help(app: CliApp, cmd = 0)
     say cli_format_help(app, cmd)
 end
 
-pub function print_version(app)
+## Prints the application version string directly to standard output.
+##
+## ### Parameters
+## - `app`: The target `CliApp` instance.
+pub function print_version(app: CliApp)
     say cli_format_version(app)
 end

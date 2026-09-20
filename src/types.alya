@@ -1,67 +1,158 @@
-# CLI Package - Type Definitions
-# Defines options, arguments, commands, applications, and parsing contexts.
+## CLI Types & Data Structures
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+## Defines option arity enums, argument kinds, and core CLI data models.
 
-# Public enumeration for option arity
+## Public enumeration for option arity.
+##
+## Defines whether an option is a boolean flag, a single-value option,
+## or a multi-value option accumulating an array of values:
+## - `Flag`: Boolean toggle flag without argument (e.g. `--verbose`).
+## - `Single`: Option expecting exactly one argument value (e.g. `--output file.txt`).
+## - `Multiple`: Option that may be specified multiple times (e.g. `-I dir1 -I dir2`).
 pub enum OptionArity
     Flag = 0
     Single = 1
     Multiple = 2
 end
 
-# Public enumeration for command type
+## Public enumeration for command type.
+##
+## Differentiates top-level root applications from subcommands:
+## - `Root`: The root CLI application entry point.
+## - `Subcommand`: A nested command under the root application.
 pub enum CommandType
     Root = 0
     Subcommand = 1
 end
 
+## Internal classification of command-line argument tokens.
+##
+## Used by the parsing engine to dispatch argument processing:
+## - `InvertedFlag`: Flag with `--no-` prefix (e.g. `--no-color`).
+## - `LongOption`: Long option or flag with `--` prefix (e.g. `--output`).
+## - `ShortOption`: Short option or flag with `-` prefix (e.g. `-v`, `-o`).
+## - `Positional`: Positional argument or subcommand name.
+pub enum ArgKind
+    InvertedFlag = 0
+    LongOption = 1
+    ShortOption = 2
+    Positional = 3
+end
+
+## Command-line option specification (flag or value-bearing option).
+##
+## Encapsulates short/long flag names, description, default value, and validation rules.
+##
+## ### Fields
+## - `opt_short`: Short flag name without dash (e.g. `"v"`).
+## - `opt_long`: Long flag name without dashes (e.g. `"verbose"`).
+## - `opt_desc`: Informative description shown in help screens.
+## - `opt_default`: Default string value when omitted.
+## - `opt_is_flag`: `1` if boolean flag without value; `0` if value option.
+## - `opt_is_multi`: `1` if option can be repeated to collect an array of values.
+## - `opt_required`: `1` if option must be provided by user.
+## - `opt_choices`: Array of permissible string choices, or empty array.
 pub struct CliOption
-    opt_short       # Short flag name (without dash, e.g. "v")
-    opt_long        # Long flag name (without dashes, e.g. "verbose")
-    opt_desc        # Description shown in help
-    opt_default     # Default string value
-    opt_is_flag     # 1 if boolean flag (no value required), 0 if option
-    opt_is_multi    # 1 if option can be repeated (collects into array)
-    opt_required    # 1 if option must be provided
-    opt_choices     # Array of allowed string values, or empty array []
+    opt_short: string,
+    opt_long: string,
+    opt_desc: string,
+    opt_default: string,
+    opt_is_flag: int,
+    opt_is_multi: int,
+    opt_required: int,
+    opt_choices: array
 end
 
+## Positional argument definition.
+##
+## Represents an ordered positional argument accepted by an application or command.
+##
+## ### Fields
+## - `arg_name`: Positional argument name (e.g. `"filename"`).
+## - `arg_desc`: Description shown in help screens.
+## - `arg_required`: `1` if argument is mandatory; `0` if optional.
+## - `arg_default`: Fallback default value if omitted.
+## - `arg_variadic`: `1` if captures all remaining positional arguments into an array.
 pub struct CliArgument
-    arg_name        # Name of positional argument (e.g. "filename")
-    arg_desc        # Description shown in help
-    arg_required    # 1 if required, 0 if optional
-    arg_default     # Fallback value if omitted
-    arg_variadic    # 1 if captures remaining positional arguments
+    arg_name: string,
+    arg_desc: string,
+    arg_required: int,
+    arg_default: string,
+    arg_variadic: int
 end
 
+## Subcommand specification.
+##
+## Encapsulates a command name, aliases, description, command-scoped options,
+## positional arguments, and nested subcommands.
+##
+## ### Fields
+## - `cmd_name`: Command identifier (e.g. `"build"`).
+## - `cmd_aliases`: Array of shorthand command aliases (e.g. `["b"]`).
+## - `cmd_desc`: Description of the command.
+## - `cmd_options`: Array of `CliOption` instances specific to this command.
+## - `cmd_arguments`: Array of `CliArgument` instances specific to this command.
+## - `cmd_subcommands`: Array of nested child `CliCommand` instances.
 pub struct CliCommand
-    cmd_name        # Command name (e.g. "build")
-    cmd_aliases     # Array of alias strings (e.g. ["b"])
-    cmd_desc        # Command description
-    cmd_options     # Array of CliOption specific to this command
-    cmd_arguments   # Array of CliArgument specific to this command
-    cmd_subcommands # Array of nested CliCommand
+    cmd_name: string,
+    cmd_aliases: array,
+    cmd_desc: string,
+    cmd_options: array,
+    cmd_arguments: array,
+    cmd_subcommands: array
 end
 
+## Top-level CLI application definition.
+##
+## Represents the root application holding global options, arguments, commands,
+## and metadata such as version and author.
+##
+## ### Fields
+## - `app_name`: Application executable name.
+## - `app_desc`: Application description summary.
+## - `app_version`: Semantic version string (e.g. `"1.0.0"`).
+## - `app_author`: Author information string.
+## - `app_options`: Array of global `CliOption` instances.
+## - `app_arguments`: Array of top-level positional `CliArgument` instances.
+## - `app_commands`: Array of registered `CliCommand` instances.
 pub struct CliApp
-    app_name        # Application executable name
-    app_desc        # Application description
-    app_version     # Semantic version string
-    app_author      # Author information or empty string
-    app_options     # Array of global CliOption
-    app_arguments   # Array of top-level CliArgument
-    app_commands    # Array of CliCommand
+    app_name: string,
+    app_desc: string,
+    app_version: string,
+    app_author: string,
+    app_options: array,
+    app_arguments: array,
+    app_commands: array
 end
 
+## Parsed execution context resulting from command-line evaluation.
+##
+## Contains resolved flags, options, positional arguments, active command name,
+## and parsing error diagnostics.
+##
+## ### Fields
+## - `ctx_app`: Reference to the originating `CliApp`.
+## - `ctx_cmd_name`: Name of active matched command or empty string.
+## - `ctx_flags`: Map of flag name to boolean indicator (`1` or `0`).
+## - `ctx_options`: Map of option name to parsed string value.
+## - `ctx_array_opts`: Map of option name to array of parsed string values.
+## - `ctx_args`: Array of positional argument strings.
+## - `ctx_arg_map`: Map of named argument to parsed string value.
+## - `ctx_errors`: Array of parsing and validation error messages.
+## - `ctx_help_req`: `1` if `-h` or `--help` was requested.
+## - `ctx_version_req`: `1` if `-V` or `--version` was requested.
+## - `ctx_raw_args`: Raw argument array provided to the parser.
 pub struct CliContext
-    ctx_app         # Reference to CliApp
-    ctx_cmd_name    # Name of active command or empty string
-    ctx_flags       # Map of flag name -> 1 / 0
-    ctx_options     # Map of option name -> string value
-    ctx_array_opts  # Map of option name -> array of string values
-    ctx_args        # Array of positional string arguments
-    ctx_arg_map     # Map of argument name -> string value
-    ctx_errors      # Array of validation or parsing error strings
-    ctx_help_req    # 1 if -h or --help was present
-    ctx_version_req # 1 if -V or --version was present
-    ctx_raw_args    # Raw argument list passed to parser
+    ctx_app: CliApp,
+    ctx_cmd_name: string,
+    ctx_flags: map,
+    ctx_options: map,
+    ctx_array_opts: map,
+    ctx_args: array,
+    ctx_arg_map: map,
+    ctx_errors: array,
+    ctx_help_req: int,
+    ctx_version_req: int,
+    ctx_raw_args: array
 end

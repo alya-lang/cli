@@ -1,33 +1,54 @@
-# CLI Package - Utility Helpers
-# Private helpers internal to the cli package
+## CLI Utility Helpers
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+## Internal string processing, padding, and flag parsing utilities.
 
-function _cli_starts_with(s, prefix)
+## Checks whether a string begins with the specified prefix.
+##
+## ### Parameters
+## - `s`: The target string to inspect.
+## - `prefix`: The prefix substring to search for.
+##
+## ### Returns
+## `1` if `s` starts with `prefix`; `0` otherwise.
+pub function _cli_starts_with(s, prefix) -> int
     let s_str = str(s)
     let p_str = str(prefix)
     let slen = len(s_str)
     let plen = len(p_str)
-    if slen < plen
-        return 0
+    return when
+        slen < plen => 0
+        s_str[0..plen] == p_str => 1
+        else => 0
     end
-    if s_str[0..plen] == p_str
-        return 1
-    end
-    return 0
 end
 
-function _cli_strip_dashes(s)
+## Strips leading single (`-`) or double (`--`) dashes from a flag identifier.
+##
+## ### Parameters
+## - `s`: The flag string to clean.
+##
+## ### Returns
+## The identifier string with leading dashes removed.
+pub function _cli_strip_dashes(s) -> string
     let s_str = str(s)
     let slen = len(s_str)
-    if _cli_starts_with(s_str, "--") == 1
-        return s_str[2..slen]
+    return when
+        _cli_starts_with(s_str, "--") == 1 => s_str[2..slen]
+        _cli_starts_with(s_str, "-") == 1  => s_str[1..slen]
+        else => s_str
     end
-    if _cli_starts_with(s_str, "-") == 1
-        return s_str[1..slen]
-    end
-    return s_str
 end
 
-function _cli_find_char(s, ch)
+## Locates the first occurrence of a character within a string.
+##
+## ### Parameters
+## - `s`: The string to search through.
+## - `ch`: The single-character string to find.
+##
+## ### Returns
+## The zero-based index of `ch`, or `-1` if not found.
+pub function _cli_find_char(s, ch) -> int
     let s_str = str(s)
     let slen = len(s_str)
     let i = 0
@@ -40,7 +61,15 @@ function _cli_find_char(s, ch)
     return -1
 end
 
-function _cli_pad_right(s, width)
+## Pads a string on the right with spaces until it reaches the specified width.
+##
+## ### Parameters
+## - `s`: The original string to pad.
+## - `width`: The target minimum string width.
+##
+## ### Returns
+## The padded string.
+pub function _cli_pad_right(s, width: int) -> string
     let res = str(s)
     let slen = len(res)
     while slen < width
@@ -50,7 +79,16 @@ function _cli_pad_right(s, width)
     return res
 end
 
-function _cli_parse_flags_spec(flags_str)
+## Parses a flag specification string into short and long flag identifiers.
+##
+## Handles formats such as `"-v, --verbose"`, `"--output, -o"`, `"--help"`, or `"-f"`.
+##
+## ### Parameters
+## - `flags_str`: The comma-delimited flag specification string.
+##
+## ### Returns
+## A 2-element array `[short_name, long_name]`.
+pub function _cli_parse_flags_spec(flags_str) -> array
     let s = trim(str(flags_str))
     let short_name = ""
     let long_name = ""
@@ -85,12 +123,28 @@ function _cli_parse_flags_spec(flags_str)
     return [short_name, long_name]
 end
 
-function _cli_str_in_array(arr, s)
+## Checks whether a target string is present inside an array.
+##
+## ### Parameters
+## - `arr`: The array of candidates to check.
+## - `s`: The target string to test.
+##
+## ### Returns
+## `1` if `s` is in `arr`; `0` otherwise.
+pub function _cli_str_in_array(arr, s) -> int
     let target = str_from_ptr(s)
     return (target in arr) ? 1 : 0
 end
 
-function _cli_join_array(arr, sep)
+## Concatenates array elements with a delimiter separator string.
+##
+## ### Parameters
+## - `arr`: The array of elements to join.
+## - `sep`: The separator string.
+##
+## ### Returns
+## The joined string representation.
+pub function _cli_join_array(arr, sep: string) -> string
     let n = len(arr)
     if n == 0
         return ""
