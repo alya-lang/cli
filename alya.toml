@@ -11,3 +11,7 @@ repository = "https://github.com/alya-lang/cli"
 keywords = ["alya", "alya-lang", "package", "cli", "argparse", "flags", "subcommands", "terminal"]
 
 [dependencies]
+
+# [lint]
+# disabled_rules = []
+# exclude = []
