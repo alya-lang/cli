@@ -17,93 +17,105 @@ import "./utils.alya"
 ##
 ## ### Returns
 ## A newly initialized `CliApp` instance.
-pub function app_new(name, description = "", version = "1.0.0")
-    return CliApp(name, description, version, "", [], [], [])
+pub function app_new(name: string, description: string = "", version: string = "1.0.0") -> CliApp
+    return CliApp { app_name: name, app_desc: description, app_version: version, app_author: "", app_options: [], app_arguments: [], app_commands: [] }
 end
 
-pub function app_get_name(app)
+## Returns the application executable name.
+pub function app_get_name(app: CliApp) -> string
     return str_from_ptr(app.app_name)
 end
 
-pub function app_get_version(app)
+## Returns the application version string.
+pub function app_get_version(app: CliApp) -> string
     return str_from_ptr(app.app_version)
 end
 
-pub function app_set_author(app, author)
+## Sets the author string, returning the updated app.
+pub function app_set_author(app: CliApp, author: string) -> CliApp
     app.app_author = author
     return app
 end
 
-pub function app_set_version(app, version)
+## Sets the version string, returning the updated app.
+pub function app_set_version(app: CliApp, version: string) -> CliApp
     app.app_version = version
     return app
 end
 
-pub function app_add_flag(app, flags_spec, description = "")
+## Registers a boolean toggle flag, returning the updated app.
+pub function app_add_flag(app: CliApp, flags_spec, description: string = "") -> CliApp
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, "0", 1, 0, 0, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "0", opt_is_flag: 1, opt_is_multi: 0, opt_required: 0, opt_choices: [] }
     let opts = app.app_options
     opts.push(opt)
     return app
 end
 
-pub function app_add_option(app, flags_spec, default_val = "", description = "")
+## Registers a single-value option, returning the updated app.
+pub function app_add_option(app: CliApp, flags_spec, default_val: string = "", description: string = "") -> CliApp
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, default_val, 0, 0, 0, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: 0, opt_is_multi: 0, opt_required: 0, opt_choices: [] }
     let opts = app.app_options
     opts.push(opt)
     return app
 end
 
-pub function app_add_multi_option(app, flags_spec, description = "")
+## Registers a repeatable multi-value option, returning the updated app.
+pub function app_add_multi_option(app: CliApp, flags_spec, description: string = "") -> CliApp
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, "", 0, 1, 0, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: 0, opt_is_multi: 1, opt_required: 0, opt_choices: [] }
     let opts = app.app_options
     opts.push(opt)
     return app
 end
 
-pub function app_add_choice_option(app, flags_spec, default_val, choices, description = "")
+## Registers a constrained-choice option, returning the updated app.
+pub function app_add_choice_option(app: CliApp, flags_spec, default_val: string, choices: array, description: string = "") -> CliApp
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, default_val, 0, 0, 0, choices)
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: 0, opt_is_multi: 0, opt_required: 0, opt_choices: choices }
     let opts = app.app_options
     opts.push(opt)
     return app
 end
 
-pub function app_add_required_option(app, flags_spec, description = "")
+## Registers a mandatory option, returning the updated app.
+pub function app_add_required_option(app: CliApp, flags_spec, description: string = "") -> CliApp
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, "", 0, 0, 1, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: 0, opt_is_multi: 0, opt_required: 1, opt_choices: [] }
     let opts = app.app_options
     opts.push(opt)
     return app
 end
 
-pub function app_add_argument(app, name, description = "", required = 0, default_val = "")
-    let arg = CliArgument(name, description, required, default_val, 0)
+## Registers a positional argument, returning the updated app.
+pub function app_add_argument(app: CliApp, name: string, description: string = "", required: int = 0, default_val: string = "") -> CliApp
+    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: required, arg_default: default_val, arg_variadic: 0 }
     let args_list = app.app_arguments
     args_list.push(arg)
     return app
 end
 
-pub function app_add_variadic_argument(app, name, description = "")
-    let arg = CliArgument(name, description, 0, "", 1)
+## Registers a variadic positional argument, returning the updated app.
+pub function app_add_variadic_argument(app: CliApp, name: string, description: string = "") -> CliApp
+    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: 0, arg_default: "", arg_variadic: 1 }
     let args_list = app.app_arguments
     args_list.push(arg)
     return app
 end
 
-pub function app_add_command(app, cmd)
+## Registers a subcommand, returning the updated app.
+pub function app_add_command(app: CliApp, cmd: CliCommand) -> CliApp
     let cmds = app.app_commands
     cmds.push(cmd)
     return app
@@ -111,79 +123,89 @@ end
 
 # --- Subcommand Constructors & Modifiers ---
 
-pub function cmd_new(name, description = "", aliases = [])
-    return CliCommand(name, aliases, description, [], [], [])
+## Constructs a new subcommand model instance.
+pub function cmd_new(name: string, description: string = "", aliases: array = []) -> CliCommand
+    return CliCommand { cmd_name: name, cmd_aliases: aliases, cmd_desc: description, cmd_options: [], cmd_arguments: [], cmd_subcommands: [] }
 end
 
-pub function cmd_get_name(cmd)
+## Returns the subcommand name.
+pub function cmd_get_name(cmd: CliCommand) -> string
     return str_from_ptr(cmd.cmd_name)
 end
 
-pub function cmd_add_flag(cmd, flags_spec, description = "")
+## Registers a boolean flag on a subcommand.
+pub function cmd_add_flag(cmd: CliCommand, flags_spec, description: string = "") -> CliCommand
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, "0", 1, 0, 0, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "0", opt_is_flag: 1, opt_is_multi: 0, opt_required: 0, opt_choices: [] }
     let opts = cmd.cmd_options
     opts.push(opt)
     return cmd
 end
 
-pub function cmd_add_option(cmd, flags_spec, default_val = "", description = "")
+## Registers a single-value option on a subcommand.
+pub function cmd_add_option(cmd: CliCommand, flags_spec, default_val: string = "", description: string = "") -> CliCommand
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, default_val, 0, 0, 0, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: 0, opt_is_multi: 0, opt_required: 0, opt_choices: [] }
     let opts = cmd.cmd_options
     opts.push(opt)
     return cmd
 end
 
-pub function cmd_add_multi_option(cmd, flags_spec, description = "")
+## Registers a repeatable option on a subcommand.
+pub function cmd_add_multi_option(cmd: CliCommand, flags_spec, description: string = "") -> CliCommand
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, "", 0, 1, 0, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: 0, opt_is_multi: 1, opt_required: 0, opt_choices: [] }
     let opts = cmd.cmd_options
     opts.push(opt)
     return cmd
 end
 
-pub function cmd_add_choice_option(cmd, flags_spec, default_val, choices, description = "")
+## Registers a constrained-choice option on a subcommand.
+pub function cmd_add_choice_option(cmd: CliCommand, flags_spec, default_val: string, choices: array, description: string = "") -> CliCommand
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, default_val, 0, 0, 0, choices)
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: 0, opt_is_multi: 0, opt_required: 0, opt_choices: choices }
     let opts = cmd.cmd_options
     opts.push(opt)
     return cmd
 end
 
-pub function cmd_add_required_option(cmd, flags_spec, description = "")
+## Registers a mandatory option on a subcommand.
+pub function cmd_add_required_option(cmd: CliCommand, flags_spec, description: string = "") -> CliCommand
     let names = _cli_parse_flags_spec(flags_spec)
     let s = str_from_ptr(names[0])
     let l = str_from_ptr(names[1])
-    let opt = CliOption(s, l, description, "", 0, 0, 1, [])
+    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: 0, opt_is_multi: 0, opt_required: 1, opt_choices: [] }
     let opts = cmd.cmd_options
     opts.push(opt)
     return cmd
 end
 
-pub function cmd_add_argument(cmd, name, description = "", required = 0, default_val = "")
-    let arg = CliArgument(name, description, required, default_val, 0)
+## Registers a positional argument on a subcommand.
+pub function cmd_add_argument(cmd: CliCommand, name: string, description: string = "", required: int = 0, default_val: string = "") -> CliCommand
+    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: required, arg_default: default_val, arg_variadic: 0 }
     let args_list = cmd.cmd_arguments
     args_list.push(arg)
     return cmd
 end
 
-pub function cmd_add_variadic_argument(cmd, name, description = "")
-    let arg = CliArgument(name, description, 0, "", 1)
+## Registers a variadic argument on a subcommand.
+pub function cmd_add_variadic_argument(cmd: CliCommand, name: string, description: string = "") -> CliCommand
+    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: 0, arg_default: "", arg_variadic: 1 }
     let args_list = cmd.cmd_arguments
     args_list.push(arg)
     return cmd
 end
 
-pub function cmd_add_subcommand(parent_cmd, sub_cmd)
+## Nests a subcommand, returning the updated parent.
+pub function cmd_add_subcommand(parent_cmd: CliCommand, sub_cmd: CliCommand) -> CliCommand
     let subs = parent_cmd.cmd_subcommands
     subs.push(sub_cmd)
     return parent_cmd
@@ -277,7 +299,8 @@ end
 
 # --- Parsing Engine ---
 
-pub function app_parse(app, raw_args)
+## Parses argument strings into a resolved execution context.
+pub function app_parse(app: CliApp, raw_args: array) -> CliContext
     let flags = {}
     let options = {}
     let array_options = {}
@@ -325,7 +348,7 @@ pub function app_parse(app, raw_args)
                             # Inverted flag: --no-cache => cache=0, no-cache=1
                             let positive_name = arg_str[5..arg_len]
                             flags[positive_name] = 0
-                            flags["no-" + positive_name] = 1
+                            flags["no-{positive_name}"] = 1
                             idx += 1
                         is ArgKind.LongOption
                             # Long option or flag
@@ -392,7 +415,7 @@ pub function app_parse(app, raw_args)
                                                 end
                                             end
                                         else
-                                            errors.push("Missing value for option: --" + raw_k)
+                                            errors.push("Missing value for option: --{raw_k}")
                                         end
                                     end
                                 else
@@ -436,7 +459,7 @@ pub function app_parse(app, raw_args)
                                                 end
                                             end
                                         else
-                                            errors.push("Missing value for option: -" + s_char)
+                                            errors.push("Missing value for option: -{s_char}")
                                         end
                                     end
                                 else
@@ -513,7 +536,8 @@ pub function app_parse(app, raw_args)
                                     let sub_match = _cli_lookup_cmd(active_cmd.cmd_subcommands, arg_str)
                                     if sub_match is not null and sub_match != 0
                                         active_cmd = sub_match
-                                        command_name = command_name + " " + str_from_ptr(sub_match.cmd_name)
+                                        let sub_name = str_from_ptr(sub_match.cmd_name)
+                                        command_name = "{command_name} {sub_name}"
                                         _cli_populate_defaults(sub_match.cmd_options, flags, options, array_options)
                                         matched_sub = 1
                                         idx += 1
@@ -563,7 +587,7 @@ pub function app_parse(app, raw_args)
                 end
             end
             if has_val == 0
-                errors.push("Missing required option: --" + l)
+                errors.push("Missing required option: --{l}")
             end
         end
 
@@ -579,7 +603,7 @@ pub function app_parse(app, raw_args)
             if len(chosen_val) > 0
                 if chosen_val not in opt.opt_choices
                     let allowed = _cli_join_array(opt.opt_choices, ", ")
-                    errors.push("Invalid value '" + chosen_val + "' for option --" + l + ". Allowed choices: [" + allowed + "]")
+                    errors.push("Invalid value '{chosen_val}' for option --{l}. Allowed choices: [{allowed}]")
                 end
             end
         end
@@ -614,7 +638,7 @@ pub function app_parse(app, raw_args)
                 pi += 1
             else
                 if adef.arg_required == 1
-                    errors.push("Missing required argument: <" + aname + ">")
+                    errors.push("Missing required argument: <{aname}>")
                 elif len(adef.arg_default) > 0
                     arg_map[aname] = str_from_ptr(adef.arg_default)
                 end
@@ -623,16 +647,18 @@ pub function app_parse(app, raw_args)
         ai += 1
     end
 
-    return CliContext(app, command_name, flags, options, array_options, positionals, arg_map, errors, help_req, version_req, raw_args)
+    return CliContext { ctx_app: app, ctx_cmd_name: command_name, ctx_flags: flags, ctx_options: options, ctx_array_opts: array_options, ctx_args: positionals, ctx_arg_map: arg_map, ctx_errors: errors, ctx_help_req: help_req, ctx_version_req: version_req, ctx_raw_args: raw_args }
 end
 
-pub function app_parse_args(app)
+## Parses process arguments into a resolved execution context.
+pub function app_parse_args(app: CliApp) -> CliContext
     return app_parse(app, args())
 end
 
 # --- Context Accessor Helpers ---
 
-pub function ctx_get_flag(ctx, name)
+## Returns a parsed flag value (1 or 0).
+pub function ctx_get_flag(ctx: CliContext, name) -> int
     let clean = _cli_strip_dashes(name)
     let fl = ctx.ctx_flags
     if clean in fl
@@ -641,7 +667,8 @@ pub function ctx_get_flag(ctx, name)
     return 0
 end
 
-pub function ctx_get_option(ctx, name, default_val = "")
+## Returns a parsed option value or the default.
+pub function ctx_get_option(ctx: CliContext, name, default_val = "") -> string
     let clean = _cli_strip_dashes(name)
     let opts = ctx.ctx_options
     if clean in opts
@@ -650,7 +677,8 @@ pub function ctx_get_option(ctx, name, default_val = "")
     return default_val
 end
 
-pub function ctx_get_all(ctx, name)
+## Returns all collected values for a repeatable option.
+pub function ctx_get_all(ctx: CliContext, name) -> array
     let clean = _cli_strip_dashes(name)
     let aopts = ctx.ctx_array_opts
     if clean in aopts
@@ -659,7 +687,8 @@ pub function ctx_get_all(ctx, name)
     return []
 end
 
-pub function ctx_get_arg(ctx, idx, default_val = "")
+## Returns a positional argument by index or the default.
+pub function ctx_get_arg(ctx: CliContext, idx: int, default_val = "") -> string
     let r_args = ctx.ctx_args
     if idx >= 0 and idx < len(r_args)
         return str_from_ptr(r_args[idx])
@@ -667,7 +696,8 @@ pub function ctx_get_arg(ctx, idx, default_val = "")
     return default_val
 end
 
-pub function ctx_get_arg_named(ctx, name, default_val = "")
+## Returns a named positional argument or the default.
+pub function ctx_get_arg_named(ctx: CliContext, name, default_val = "") -> string
     let amap = ctx.ctx_arg_map
     let n = str_from_ptr(name)
     if n in amap
@@ -676,100 +706,123 @@ pub function ctx_get_arg_named(ctx, name, default_val = "")
     return default_val
 end
 
-pub function ctx_get_args(ctx)
+## Returns all positional argument strings.
+pub function ctx_get_args(ctx: CliContext) -> array
     return ctx.ctx_args
 end
 
-pub function ctx_get_command(ctx)
+## Returns the active command name.
+pub function ctx_get_command(ctx: CliContext) -> string
     return str_from_ptr(ctx.ctx_cmd_name)
 end
 
-pub function ctx_has_command(ctx, name)
+## Returns 1 when the named command is active.
+pub function ctx_has_command(ctx: CliContext, name) -> int
     let n = str_from_ptr(name)
     let c = str_from_ptr(ctx.ctx_cmd_name)
     return c == n
 end
 
-pub function ctx_has_errors(ctx)
+## Returns 1 when parsing collected errors.
+pub function ctx_has_errors(ctx: CliContext) -> int
     return len(ctx.ctx_errors) > 0
 end
 
-pub function ctx_get_errors(ctx)
+## Returns parsing and validation error messages.
+pub function ctx_get_errors(ctx: CliContext) -> array
     return ctx.ctx_errors
 end
 
-pub function ctx_help_requested(ctx)
+## Returns 1 when help was requested.
+pub function ctx_help_requested(ctx: CliContext) -> int
     return ctx.ctx_help_req
 end
 
-pub function ctx_version_requested(ctx)
+## Returns 1 when version output was requested.
+pub function ctx_version_requested(ctx: CliContext) -> int
     return ctx.ctx_version_req
 end
 
 # --- Struct Methods (Alya v0.0.18) ---
 
 # CliApp methods
-pub function CliApp.set_author(self, author)
+## Sets the author string on this app.
+pub function CliApp.set_author(self: CliApp, author: string) -> CliApp
     return app_set_author(self, author)
 end
 
-pub function CliApp.set_version(self, version)
+## Sets the version string on this app.
+pub function CliApp.set_version(self: CliApp, version: string) -> CliApp
     return app_set_version(self, version)
 end
 
-pub function CliApp.add_flag(self, flags_spec, description = "")
+## Adds a boolean flag to this app.
+pub function CliApp.add_flag(self: CliApp, flags_spec, description: string = "") -> CliApp
     return app_add_flag(self, flags_spec, description)
 end
 
-pub function CliApp.flag(self, flags_spec, description = "")
+## Alias for add_flag on this app.
+pub function CliApp.flag(self: CliApp, flags_spec, description: string = "") -> CliApp
     return app_add_flag(self, flags_spec, description)
 end
 
-pub function CliApp.add_option(self, flags_spec, default_val = "", description = "")
+## Adds a single-value option to this app.
+pub function CliApp.add_option(self: CliApp, flags_spec, default_val: string = "", description: string = "") -> CliApp
     return app_add_option(self, flags_spec, default_val, description)
 end
 
-pub function CliApp.option(self, flags_spec, default_val = "", description = "")
+## Alias for add_option on this app.
+pub function CliApp.option(self: CliApp, flags_spec, default_val: string = "", description: string = "") -> CliApp
     return app_add_option(self, flags_spec, default_val, description)
 end
 
-pub function CliApp.add_multi_option(self, flags_spec, description = "")
+## Adds a repeatable option to this app.
+pub function CliApp.add_multi_option(self: CliApp, flags_spec, description: string = "") -> CliApp
     return app_add_multi_option(self, flags_spec, description)
 end
 
-pub function CliApp.add_choice_option(self, flags_spec, default_val, choices, description = "")
+## Adds a constrained-choice option to this app.
+pub function CliApp.add_choice_option(self: CliApp, flags_spec, default_val: string, choices: array, description: string = "") -> CliApp
     return app_add_choice_option(self, flags_spec, default_val, choices, description)
 end
 
-pub function CliApp.add_required_option(self, flags_spec, description = "")
+## Adds a mandatory option to this app.
+pub function CliApp.add_required_option(self: CliApp, flags_spec, description: string = "") -> CliApp
     return app_add_required_option(self, flags_spec, description)
 end
 
-pub function CliApp.add_argument(self, name, description = "", required = 0, default_val = "")
+## Adds a positional argument to this app.
+pub function CliApp.add_argument(self: CliApp, name: string, description: string = "", required: int = 0, default_val: string = "") -> CliApp
     return app_add_argument(self, name, description, required, default_val)
 end
 
-pub function CliApp.argument(self, name, description = "", required = 0, default_val = "")
+## Alias for add_argument on this app.
+pub function CliApp.argument(self: CliApp, name: string, description: string = "", required: int = 0, default_val: string = "") -> CliApp
     return app_add_argument(self, name, description, required, default_val)
 end
 
-pub function CliApp.add_variadic_argument(self, name, description = "")
+## Adds a variadic argument to this app.
+pub function CliApp.add_variadic_argument(self: CliApp, name: string, description: string = "") -> CliApp
     return app_add_variadic_argument(self, name, description)
 end
 
-pub function CliApp.add_command(self, cmd)
+## Adds a subcommand to this app.
+pub function CliApp.add_command(self: CliApp, cmd: CliCommand) -> CliApp
     return app_add_command(self, cmd)
 end
 
-pub function CliApp.command(self, cmd)
+## Alias for add_command on this app.
+pub function CliApp.command(self: CliApp, cmd: CliCommand) -> CliApp
     return app_add_command(self, cmd)
 end
 
-pub function CliApp.parse(self, raw_args)
+## Parses argument strings with this app.
+pub function CliApp.parse(self: CliApp, raw_args: array) -> CliContext
     return app_parse(self, raw_args)
 end
 
-pub function CliApp.run(self, raw_args = null)
+## Parses given or process arguments with this app.
+pub function CliApp.run(self: CliApp, raw_args = null) -> CliContext
     if raw_args is null
         return app_parse_args(self)
     end
@@ -777,127 +830,158 @@ pub function CliApp.run(self, raw_args = null)
 end
 
 # CliCommand methods
-pub function CliCommand.add_flag(self, flags_spec, description = "")
+## Adds a boolean flag to this command.
+pub function CliCommand.add_flag(self: CliCommand, flags_spec, description: string = "") -> CliCommand
     return cmd_add_flag(self, flags_spec, description)
 end
 
-pub function CliCommand.flag(self, flags_spec, description = "")
+## Alias for add_flag on this command.
+pub function CliCommand.flag(self: CliCommand, flags_spec, description: string = "") -> CliCommand
     return cmd_add_flag(self, flags_spec, description)
 end
 
-pub function CliCommand.add_option(self, flags_spec, default_val = "", description = "")
+## Adds a single-value option to this command.
+pub function CliCommand.add_option(self: CliCommand, flags_spec, default_val: string = "", description: string = "") -> CliCommand
     return cmd_add_option(self, flags_spec, default_val, description)
 end
 
-pub function CliCommand.option(self, flags_spec, default_val = "", description = "")
+## Alias for add_option on this command.
+pub function CliCommand.option(self: CliCommand, flags_spec, default_val: string = "", description: string = "") -> CliCommand
     return cmd_add_option(self, flags_spec, default_val, description)
 end
 
-pub function CliCommand.add_multi_option(self, flags_spec, description = "")
+## Adds a repeatable option to this command.
+pub function CliCommand.add_multi_option(self: CliCommand, flags_spec, description: string = "") -> CliCommand
     return cmd_add_multi_option(self, flags_spec, description)
 end
 
-pub function CliCommand.add_choice_option(self, flags_spec, default_val, choices, description = "")
+## Adds a constrained-choice option to this command.
+pub function CliCommand.add_choice_option(self: CliCommand, flags_spec, default_val: string, choices: array, description: string = "") -> CliCommand
     return cmd_add_choice_option(self, flags_spec, default_val, choices, description)
 end
 
-pub function CliCommand.add_required_option(self, flags_spec, description = "")
+## Adds a mandatory option to this command.
+pub function CliCommand.add_required_option(self: CliCommand, flags_spec, description: string = "") -> CliCommand
     return cmd_add_required_option(self, flags_spec, description)
 end
 
-pub function CliCommand.add_argument(self, name, description = "", required = 0, default_val = "")
+## Adds a positional argument to this command.
+pub function CliCommand.add_argument(self: CliCommand, name: string, description: string = "", required: int = 0, default_val: string = "") -> CliCommand
     return cmd_add_argument(self, name, description, required, default_val)
 end
 
-pub function CliCommand.argument(self, name, description = "", required = 0, default_val = "")
+## Alias for add_argument on this command.
+pub function CliCommand.argument(self: CliCommand, name: string, description: string = "", required: int = 0, default_val: string = "") -> CliCommand
     return cmd_add_argument(self, name, description, required, default_val)
 end
 
-pub function CliCommand.add_variadic_argument(self, name, description = "")
+## Adds a variadic argument to this command.
+pub function CliCommand.add_variadic_argument(self: CliCommand, name: string, description: string = "") -> CliCommand
     return cmd_add_variadic_argument(self, name, description)
 end
 
-pub function CliCommand.add_subcommand(self, sub_cmd)
+## Nests a subcommand under this command.
+pub function CliCommand.add_subcommand(self: CliCommand, sub_cmd: CliCommand) -> CliCommand
     return cmd_add_subcommand(self, sub_cmd)
 end
 
-pub function CliCommand.subcommand(self, sub_cmd)
+## Alias for add_subcommand on this command.
+pub function CliCommand.subcommand(self: CliCommand, sub_cmd: CliCommand) -> CliCommand
     return cmd_add_subcommand(self, sub_cmd)
 end
 
 # CliContext methods
-pub function CliContext.get_flag(self, name)
+## Returns a parsed flag value from this context.
+pub function CliContext.get_flag(self: CliContext, name) -> int
     return ctx_get_flag(self, name)
 end
 
-pub function CliContext.flag(self, name)
+## Alias for get_flag on this context.
+pub function CliContext.flag(self: CliContext, name) -> int
     return ctx_get_flag(self, name)
 end
 
-pub function CliContext.get_option(self, name, default_val = "")
+## Returns a parsed option value from this context.
+pub function CliContext.get_option(self: CliContext, name, default_val = "") -> string
     return ctx_get_option(self, name, default_val)
 end
 
-pub function CliContext.option(self, name, default_val = "")
+## Alias for get_option on this context.
+pub function CliContext.option(self: CliContext, name, default_val = "") -> string
     return ctx_get_option(self, name, default_val)
 end
 
-pub function CliContext.get_all(self, name)
+## Returns all values for a repeatable option.
+pub function CliContext.get_all(self: CliContext, name) -> array
     return ctx_get_all(self, name)
 end
 
-pub function CliContext.all(self, name)
+## Alias for get_all on this context.
+pub function CliContext.all(self: CliContext, name) -> array
     return ctx_get_all(self, name)
 end
 
-pub function CliContext.get_arg(self, idx, default_val = "")
+## Returns a positional argument from this context.
+pub function CliContext.get_arg(self: CliContext, idx: int, default_val = "") -> string
     return ctx_get_arg(self, idx, default_val)
 end
 
-pub function CliContext.arg(self, idx, default_val = "")
+## Alias for get_arg on this context.
+pub function CliContext.arg(self: CliContext, idx: int, default_val = "") -> string
     return ctx_get_arg(self, idx, default_val)
 end
 
-pub function CliContext.get_arg_named(self, name, default_val = "")
+## Returns a named positional from this context.
+pub function CliContext.get_arg_named(self: CliContext, name, default_val = "") -> string
     return ctx_get_arg_named(self, name, default_val)
 end
 
-pub function CliContext.get_args(self)
+## Returns all positional arguments.
+pub function CliContext.get_args(self: CliContext) -> array
     return ctx_get_args(self)
 end
 
-pub function CliContext.args(self)
+## Alias for get_args on this context.
+pub function CliContext.args(self: CliContext) -> array
     return ctx_get_args(self)
 end
 
-pub function CliContext.get_command(self)
+## Returns the active command name.
+pub function CliContext.get_command(self: CliContext) -> string
     return ctx_get_command(self)
 end
 
-pub function CliContext.command(self)
+## Alias for get_command on this context.
+pub function CliContext.command(self: CliContext) -> string
     return ctx_get_command(self)
 end
 
-pub function CliContext.has_command(self, name)
+## Returns 1 when the named command is active.
+pub function CliContext.has_command(self: CliContext, name) -> int
     return ctx_has_command(self, name)
 end
 
-pub function CliContext.has_errors(self)
+## Returns 1 when this context has errors.
+pub function CliContext.has_errors(self: CliContext) -> int
     return ctx_has_errors(self)
 end
 
-pub function CliContext.get_errors(self)
+## Returns error messages from this context.
+pub function CliContext.get_errors(self: CliContext) -> array
     return ctx_get_errors(self)
 end
 
-pub function CliContext.errors(self)
+## Alias for get_errors on this context.
+pub function CliContext.errors(self: CliContext) -> array
     return ctx_get_errors(self)
 end
 
-pub function CliContext.help_requested(self)
+## Returns 1 when help was requested.
+pub function CliContext.help_requested(self: CliContext) -> int
     return ctx_help_requested(self)
 end
 
-pub function CliContext.version_requested(self)
+## Returns 1 when version output was requested.
+pub function CliContext.version_requested(self: CliContext) -> int
     return ctx_version_requested(self)
 end

@@ -1,4 +1,6 @@
-# Example usage of cli package
+## Demo of the cli package
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
 import "../src/lib.alya" as cli
 
 function main()
