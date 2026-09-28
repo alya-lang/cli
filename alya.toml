@@ -12,6 +12,10 @@ keywords = ["alya", "alya-lang", "package", "cli", "argparse", "flags", "subcomm
 
 [dependencies]
 
+[features]
+default = ["help"]
+help = []
+
 # [lint]
 # disabled_rules = []
 # exclude = []

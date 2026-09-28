@@ -28,7 +28,7 @@ Modern, feature-rich command-line interface, argument parsing, flag validation, 
 - 🌳 **Subcommand Routing**:
   - Full hierarchical subcommands with isolated options and arguments (e.g. `forge build -r`, `forge test`)
   - Command aliases (e.g. `build` with alias `b`)
-- 📄 **Automated Help & Version**:
+- 📄 **Automated Help & Version** (optional `help` feature, enabled by default):
   - Auto-generated, column-aligned help screens for applications and subcommands
   - Automatic `-h, --help` and `-V, --version` flag handling
 
@@ -44,7 +44,7 @@ cli/
 │   ├── types.alya          # CliApp, CliCommand, CliOption, CliArgument, CliContext
 │   └── core/
 │       ├── parser.alya     # Parsing engine, flag clustering, validation logic
-│       ├── formatter.alya  # Help screen and version formatting
+│       ├── formatter.alya  # Help screen and version formatting (`help` feature)
 │       └── utils.alya      # String and array utilities
 ├── examples/
 │   └── demo.alya           # Working demonstration CLI application
@@ -74,6 +74,22 @@ Or install it directly with `alya`:
 ```bash
 alya add cli --git https://github.com/alya-lang/cli --branch main
 alya install
+```
+
+### Package Features
+
+| Feature | Default | Description |
+|:---|:---:|:---|
+| `help` | ✅ | Help/version screen rendering (`help`, `print_help`, `print_version`). Without it only parsing/validation remain. |
+
+```bash
+# Full build (default)
+alya install
+alya test
+
+# Slim build without help rendering
+alya install --no-default-features
+alya test --no-default-features
 ```
 
 ---

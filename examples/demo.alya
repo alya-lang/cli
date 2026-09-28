@@ -28,6 +28,7 @@ function main()
 
     # 5. Display automated help screen
     say "=== Automated Help Screen Demo ==="
+    @cfg(feature = "help")
     say cli::help(app)
 
     # 6. Simulate parsing realistic CLI arguments

@@ -5,6 +5,7 @@
 
 import "./types.alya"
 import "./core/parser.alya"
+@cfg(feature = "help")
 import "./core/formatter.alya"
 
 ## Constructs and initializes a new top-level CLI application.
@@ -87,6 +88,8 @@ end
 
 ## Formats and returns the complete help screen text for the application or a specific command.
 ##
+## Requires the `help` feature (default-on).
+##
 ## ### Parameters
 ## - `app`: The target `CliApp` instance.
 ## - `cmd`: Optional `CliCommand` instance. If omitted or `0`, renders root application help.
@@ -99,23 +102,30 @@ end
 ## let help_text = cli::help(app)
 ## say help_text
 ## ```
+@cfg(feature = "help")
 pub function help(app: CliApp, cmd = 0) -> string
     return cli_format_help(app, cmd)
 end
 
 ## Prints the formatted help screen directly to standard output.
 ##
+## Requires the `help` feature (default-on).
+##
 ## ### Parameters
 ## - `app`: The target `CliApp` instance.
 ## - `cmd`: Optional `CliCommand` instance. Defaults to `0` (root help).
+@cfg(feature = "help")
 pub function print_help(app: CliApp, cmd = 0)
     say cli_format_help(app, cmd)
 end
 
 ## Prints the application version string directly to standard output.
 ##
+## Requires the `help` feature (default-on).
+##
 ## ### Parameters
 ## - `app`: The target `CliApp` instance.
+@cfg(feature = "help")
 pub function print_version(app: CliApp)
     say cli_format_version(app)
 end

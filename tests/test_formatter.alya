@@ -3,6 +3,19 @@
 import "std/test"
 import "../src/lib.alya" as cli
 
+# Without the `help` feature there is nothing to format: register an
+# empty suite so the file still compiles and passes in the slim view.
+@cfg(not(feature = "help"))
+function main()
+    test_suite("CLI Formatter Tests (skipped without help feature)")
+    let r = runner_new()
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+@cfg(feature = "help")
 function main()
     test_suite("CLI Formatter Tests")
     let r = runner_new()
