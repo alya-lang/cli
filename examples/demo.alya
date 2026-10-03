@@ -18,7 +18,7 @@ function main()
     cli::cmd_add_flag(build_cmd, "-r, --release", "Build optimized release binaries")
     cli::cmd_add_option(build_cmd, "-o, --output", "dist", "Output directory")
     cli::cmd_add_choice_option(build_cmd, "-t, --target", "native", ["native", "x64", "arm64"], "Target architecture")
-    cli::cmd_add_argument(build_cmd, "entrypoint", "Source file to compile", 0, "src/main.alya")
+    cli::cmd_add_argument(build_cmd, "entrypoint", "Source file to compile", false, "src/main.alya")
     cli::app_add_command(app, build_cmd)
 
     # 4. Add 'test' command
@@ -44,8 +44,8 @@ function main()
         end
     else
         say "Command executed : " + ctx.command()
-        say "Verbose mode     : " + (ctx.flag("verbose") == 1 ? "yes" : "no")
-        say "Release mode     : " + (ctx.flag("release") == 1 ? "yes" : "no")
+        say "Verbose mode     : " + (ctx.flag("verbose") == true ? "yes" : "no")
+        say "Release mode     : " + (ctx.flag("release") == true ? "yes" : "no")
         say "Target arch      : " + ctx.option("target", "native")
         say "Output path      : " + ctx.option("output", "dist")
         say "Source file      : " + ctx.get_arg_named("entrypoint", "src/main.alya")

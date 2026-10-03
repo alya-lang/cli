@@ -26,30 +26,30 @@ function main()
 
     let run_cmd = cli::command("run", "Run a command in a new container", ["r"])
     cli::cmd_add_flag(run_cmd, "-d, --detach", "Run container in background")
-    cli::cmd_add_argument(run_cmd, "image", "Container image name", 1)
-    cli::cmd_add_argument(run_cmd, "cmd", "Command to execute", 0, "bash")
+    cli::cmd_add_argument(run_cmd, "image", "Container image name", true)
+    cli::cmd_add_argument(run_cmd, "cmd", "Command to execute", false, "bash")
     cli::app_add_command(app, run_cmd)
 
     # 1. Top-level help formatting
     let h = cli::help(app)
-    runner_assert_eq(r, contains(h, "Usage: dock-tool [COMMAND] [OPTIONS]"), 1, "help usage line")
-    runner_assert_eq(r, contains(h, "A container management CLI"), 1, "help description")
-    runner_assert_eq(r, contains(h, "Commands:"), 1, "help commands header")
-    runner_assert_eq(r, contains(h, "run, r"), 1, "help lists run with alias r")
-    runner_assert_eq(r, contains(h, "-v, --verbose"), 1, "help lists verbose flag")
-    runner_assert_eq(r, contains(h, "-H, --host <value>"), 1, "help lists host option")
-    runner_assert_eq(r, contains(h, "(default: tcp://127.0.0.1:2375)"), 1, "help shows host default")
-    runner_assert_eq(r, contains(h, "-h, --help"), 1, "help lists automated help flag")
-    runner_assert_eq(r, contains(h, "-V, --version"), 1, "help lists automated version flag")
+    runner_assert_eq(r, contains(h, "Usage: dock-tool [COMMAND] [OPTIONS]"), true, "help usage line")
+    runner_assert_eq(r, contains(h, "A container management CLI"), true, "help description")
+    runner_assert_eq(r, contains(h, "Commands:"), true, "help commands header")
+    runner_assert_eq(r, contains(h, "run, r"), true, "help lists run with alias r")
+    runner_assert_eq(r, contains(h, "-v, --verbose"), true, "help lists verbose flag")
+    runner_assert_eq(r, contains(h, "-H, --host <value>"), true, "help lists host option")
+    runner_assert_eq(r, contains(h, "(default: tcp://127.0.0.1:2375)"), true, "help shows host default")
+    runner_assert_eq(r, contains(h, "-h, --help"), true, "help lists automated help flag")
+    runner_assert_eq(r, contains(h, "-V, --version"), true, "help lists automated version flag")
 
     # 2. Command-specific help formatting
     let h_cmd = cli::help(app, run_cmd)
-    runner_assert_eq(r, contains(h_cmd, "Usage: dock-tool run [OPTIONS] <image> [cmd]"), 1, "command usage with args")
-    runner_assert_eq(r, contains(h_cmd, "Run a command in a new container"), 1, "command description")
-    runner_assert_eq(r, contains(h_cmd, "-d, --detach"), 1, "command detach flag")
-    runner_assert_eq(r, contains(h_cmd, "<image>"), 1, "command arguments image")
-    runner_assert_eq(r, contains(h_cmd, "(required)"), 1, "command argument required indicator")
-    runner_assert_eq(r, contains(h_cmd, "(default: bash)"), 1, "command argument default indicator")
+    runner_assert_eq(r, contains(h_cmd, "Usage: dock-tool run [OPTIONS] <image> [cmd]"), true, "command usage with args")
+    runner_assert_eq(r, contains(h_cmd, "Run a command in a new container"), true, "command description")
+    runner_assert_eq(r, contains(h_cmd, "-d, --detach"), true, "command detach flag")
+    runner_assert_eq(r, contains(h_cmd, "<image>"), true, "command arguments image")
+    runner_assert_eq(r, contains(h_cmd, "(required)"), true, "command argument required indicator")
+    runner_assert_eq(r, contains(h_cmd, "(default: bash)"), true, "command argument default indicator")
 
     # 3. Version string formatting
     let ver_str = cli::cli_format_version(app)
@@ -58,8 +58,8 @@ function main()
     # 4. Error formatting
     let errs = ["Missing option: --host", "Invalid image name"]
     let err_screen = cli::cli_format_errors(errs)
-    runner_assert_eq(r, contains(err_screen, "Error: Missing option: --host"), 1, "formatted error 1")
-    runner_assert_eq(r, contains(err_screen, "Error: Invalid image name"), 1, "formatted error 2")
+    runner_assert_eq(r, contains(err_screen, "Error: Missing option: --host"), true, "formatted error 1")
+    runner_assert_eq(r, contains(err_screen, "Error: Invalid image name"), true, "formatted error 2")
 
     let failed = runner_summary(r)
     if failed > 0

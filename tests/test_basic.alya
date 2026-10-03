@@ -23,9 +23,9 @@ function main()
     let args1 = ["--verbose", "--output=build", "main.alya"]
     let ctx1 = cli::parse(app, args1)
 
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "verbose"), 1, "flag verbose is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "v"), 1, "short flag v is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "debug"), 0, "unspecified flag debug is 0")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "verbose"), true, "flag verbose is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "v"), true, "short flag v is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "debug"), false, "unspecified flag debug is 0")
     runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "output"), "build", "output is build")
     runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "o"), "build", "short opt o is build")
     runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "env"), "dev", "default env is dev")
@@ -37,7 +37,7 @@ function main()
     let args2 = ["-v", "-o", "bin/out", "-e", "prod", "server.alya"]
     let ctx2 = cli::parse(app, args2)
 
-    runner_assert_eq(r, cli::ctx_get_flag(ctx2, "verbose"), 1, "short -v enables verbose")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx2, "verbose"), true, "short -v enables verbose")
     runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "output"), "bin/out", "short -o sets output")
     runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "env"), "prod", "short -e sets env")
     runner_assert_str_eq(r, cli::ctx_get_arg(ctx2, 0), "server.alya", "arg 0 is server.alya")
@@ -46,7 +46,7 @@ function main()
     let args3 = ["-v", "--", "--not-a-flag", "-o", "file.txt"]
     let ctx3 = cli::parse(app, args3)
 
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "verbose"), 1, "verbose flag before -- parsed")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "verbose"), true, "verbose flag before -- parsed")
     runner_assert_eq(r, len(cli::ctx_get_args(ctx3)), 3, "positional args after -- count is 3")
     runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 0), "--not-a-flag", "first raw arg preserved")
     runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 1), "-o", "second raw arg preserved")
@@ -61,7 +61,7 @@ function main()
     app4.option("-t, --tag", "latest", "Docker tag")
 
     let ctx4 = app4.run(["-x", "--tag=v1.2"])
-    runner_assert_eq(r, ctx4.flag("execute"), 1, "ctx4.flag struct method works")
+    runner_assert_eq(r, ctx4.flag("execute"), true, "ctx4.flag struct method works")
     runner_assert_str_eq(r, ctx4.option("tag"), "v1.2", "ctx4.option struct method works")
 
     let failed = runner_summary(r)

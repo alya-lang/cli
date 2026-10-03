@@ -47,9 +47,9 @@ pub function cli_format_help(app, cmd = 0) -> string
     if len(arg_defs) > 0
         for adef in arg_defs
             let aname = str_from_ptr(adef.arg_name)
-            if adef.arg_variadic == 1
+            if adef.arg_variadic == true
                 out += " [{aname}...]"
-            elif adef.arg_required == 1
+            elif adef.arg_required == true
                 out += " <{aname}>"
             else
                 out += " [{aname}]"
@@ -140,18 +140,18 @@ pub function cli_format_help(app, cmd = 0) -> string
             label = "-{s}"
         end
 
-        if opt.opt_is_flag == 0
+        if opt.opt_is_flag == false
             label += " <value>"
         end
 
         let padded = _cli_pad_right(label, 26)
         let line = "  {padded} {d}"
-        if opt.opt_is_flag == 0
+        if opt.opt_is_flag == false
             if len(def) > 0
                 line += " (default: {def})"
             end
         end
-        if opt.opt_required == 1
+        if opt.opt_required == true
             line += " (required)"
         end
         if len(opt.opt_choices) > 0
@@ -172,7 +172,7 @@ pub function cli_format_help(app, cmd = 0) -> string
             let alabel = "<{aname}>"
             let padded = _cli_pad_right(alabel, 26)
             let aline = "  {padded} {adesc}"
-            if adef.arg_required == 1
+            if adef.arg_required == true
                 aline += " (required)"
             elif len(adef.arg_default) > 0
                 let adef_str = str_from_ptr(adef.arg_default)

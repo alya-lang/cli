@@ -33,8 +33,8 @@ function main()
     # 1. Matching command by primary name
     let ctx1 = cli::parse(app, ["build", "-r", "--target=arm64", "app.alya"])
     runner_assert_str_eq(r, cli::ctx_get_command(ctx1), "build", "matched build command")
-    runner_assert_eq(r, cli::ctx_has_command(ctx1, "build"), 1, "ctx_has_command build is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "release"), 1, "command flag release is 1")
+    runner_assert_eq(r, cli::ctx_has_command(ctx1, "build"), true, "ctx_has_command build is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "release"), true, "command flag release is 1")
     runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "target"), "arm64", "command option target is arm64")
     runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx1, "source"), "app.alya", "command arg source is app.alya")
 
@@ -46,9 +46,9 @@ function main()
 
     # 3. Global flags combined with subcommands
     let ctx3 = cli::parse(app, ["--verbose", "test", "--watch"])
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "verbose"), 1, "global verbose flag parsed before command")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "verbose"), true, "global verbose flag parsed before command")
     runner_assert_str_eq(r, cli::ctx_get_command(ctx3), "test", "matched test command")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "watch"), 1, "test specific flag watch is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "watch"), true, "test specific flag watch is 1")
 
     # 4. Nested subcommands: remote add origin https://...
     let ctx4 = cli::parse(app, ["remote", "add", "origin", "https://github.com/alya-lang/cli.git"])

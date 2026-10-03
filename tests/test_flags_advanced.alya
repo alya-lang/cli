@@ -17,12 +17,12 @@ function main()
 
     # 1. Clustered short flags: -abc
     let ctx1 = cli::parse(app, ["-abc"])
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "a"), 1, "clustered flag -a is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "all"), 1, "clustered flag --all is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "b"), 1, "clustered flag -b is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "buffer"), 1, "clustered flag --buffer is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "c"), 1, "clustered flag -c is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "clean"), 1, "clustered flag --clean is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "a"), true, "clustered flag -a is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "all"), true, "clustered flag --all is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "b"), true, "clustered flag -b is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "buffer"), true, "clustered flag --buffer is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "c"), true, "clustered flag -c is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "clean"), true, "clustered flag --clean is 1")
 
     # 2. Attached option value: -oMyCustomPath.tar
     let ctx2 = cli::parse(app, ["-oMyCustomPath.tar"])
@@ -31,8 +31,8 @@ function main()
 
     # 3. Inverted flag: --no-color
     let ctx3 = cli::parse(app, ["--no-color"])
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "color"), 0, "--no-color sets color to 0")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "no-color"), 1, "--no-color flag is 1")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "color"), false, "--no-color sets color to 0")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "no-color"), true, "--no-color flag is 1")
 
     # 4. Multi-value / array options: -I dir1 --include=dir2 -I dir3
     let ctx4 = cli::parse(app, ["-I", "src/include", "--include=vendor/include", "-I", "third_party"])
@@ -44,19 +44,19 @@ function main()
 
     # 5. Automated -h and --help
     let ctx5 = cli::parse(app, ["--help"])
-    runner_assert_eq(r, cli::ctx_help_requested(ctx5), 1, "help requested via --help")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx5, "help"), 1, "help flag is 1")
+    runner_assert_eq(r, cli::ctx_help_requested(ctx5), true, "help requested via --help")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx5, "help"), true, "help flag is 1")
 
     let ctx6 = cli::parse(app, ["-h"])
-    runner_assert_eq(r, cli::ctx_help_requested(ctx6), 1, "help requested via -h")
+    runner_assert_eq(r, cli::ctx_help_requested(ctx6), true, "help requested via -h")
 
     # 6. Automated -V and --version
     let ctx7 = cli::parse(app, ["--version"])
-    runner_assert_eq(r, cli::ctx_version_requested(ctx7), 1, "version requested via --version")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx7, "version"), 1, "version flag is 1")
+    runner_assert_eq(r, cli::ctx_version_requested(ctx7), true, "version requested via --version")
+    runner_assert_eq(r, cli::ctx_get_flag(ctx7, "version"), true, "version flag is 1")
 
     let ctx8 = cli::parse(app, ["-V"])
-    runner_assert_eq(r, cli::ctx_version_requested(ctx8), 1, "version requested via -V")
+    runner_assert_eq(r, cli::ctx_version_requested(ctx8), true, "version requested via -V")
 
     let failed = runner_summary(r)
     if failed > 0

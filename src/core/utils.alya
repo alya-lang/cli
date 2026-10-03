@@ -17,9 +17,9 @@ pub function _cli_starts_with(s, prefix) -> int
     let slen = len(s_str)
     let plen = len(p_str)
     return when
-        slen < plen => 0
-        s_str[0..plen] == p_str => 1
-        else => 0
+        slen < plen => false
+        s_str[0..plen] == p_str => true
+        else => false
     end
 end
 
@@ -34,8 +34,8 @@ pub function _cli_strip_dashes(s) -> string
     let s_str = str(s)
     let slen = len(s_str)
     return when
-        _cli_starts_with(s_str, "--") == 1 => s_str[2..slen]
-        _cli_starts_with(s_str, "-") == 1  => s_str[1..slen]
+        _cli_starts_with(s_str, "--") == true => s_str[2..slen]
+        _cli_starts_with(s_str, "-") == true  => s_str[1..slen]
         else => s_str
     end
 end
@@ -96,25 +96,25 @@ pub function _cli_parse_flags_spec(flags_str) -> array
         let parts = split(s, ",")
         let p0 = trim(str(parts[0]))
         let p1 = trim(str(parts[1]))
-        if _cli_starts_with(p0, "--") == 1
+        if _cli_starts_with(p0, "--") == true
             long_name = p0[2..len(p0)]
-        elif _cli_starts_with(p0, "-") == 1
+        elif _cli_starts_with(p0, "-") == true
             short_name = p0[1..len(p0)]
         else
             long_name = p0
         end
 
-        if _cli_starts_with(p1, "--") == 1
+        if _cli_starts_with(p1, "--") == true
             long_name = p1[2..len(p1)]
-        elif _cli_starts_with(p1, "-") == 1
+        elif _cli_starts_with(p1, "-") == true
             short_name = p1[1..len(p1)]
         else
             long_name = p1
         end
     else
-        if _cli_starts_with(s, "--") == 1
+        if _cli_starts_with(s, "--") == true
             long_name = s[2..len(s)]
-        elif _cli_starts_with(s, "-") == 1
+        elif _cli_starts_with(s, "-") == true
             short_name = s[1..len(s)]
         else
             long_name = s
@@ -133,7 +133,7 @@ end
 ## `1` if `s` is in `arr`; `0` otherwise.
 pub function _cli_str_in_array(arr, s) -> int
     let target = str_from_ptr(s)
-    return (target in arr) ? 1 : 0
+    return (target in arr) ? true : false
 end
 
 ## Concatenates array elements with a delimiter separator string.
