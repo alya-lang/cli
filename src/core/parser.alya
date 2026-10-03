@@ -717,14 +717,14 @@ pub function ctx_get_command(ctx: CliContext) -> string
 end
 
 ## Returns 1 when the named command is active.
-pub function ctx_has_command(ctx: CliContext, name) -> int
+pub function ctx_has_command(ctx: CliContext, name) -> bool
     let n = str_from_ptr(name)
     let c = str_from_ptr(ctx.ctx_cmd_name)
     return c == n
 end
 
 ## Returns 1 when parsing collected errors.
-pub function ctx_has_errors(ctx: CliContext) -> int
+pub function ctx_has_errors(ctx: CliContext) -> bool
     return len(ctx.ctx_errors) > 0
 end
 
