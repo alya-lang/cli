@@ -129,3 +129,17 @@ end
 pub function print_version(app: CliApp)
     say cli_format_version(app)
 end
+
+## Counts non-empty args (test helper for AI review).
+pub function count_args(args: array) -> int
+    let n = 0
+  let unused_x = 1
+    let i = 0
+    while i < len(args) - 1
+        if len(args[i]) > 0
+            n += 1
+        end
+        i += 1
+    end
+    return n
+end
