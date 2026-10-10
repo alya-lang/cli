@@ -348,7 +348,7 @@ pub function app_parse(app: CliApp, raw_args: array) -> CliContext
                             # Inverted flag: --no-cache => cache=0, no-cache=1
                             let positive_name = arg_str[5..arg_len]
                             flags[positive_name] = false
-                            flags["no-{positive_name}"] = true
+                            flags[f"no-{positive_name}"] = true
                             idx += 1
                         is ArgKind.LongOption
                             # Long option or flag
@@ -415,7 +415,7 @@ pub function app_parse(app: CliApp, raw_args: array) -> CliContext
                                                 end
                                             end
                                         else
-                                            errors.push("Missing value for option: --{raw_k}")
+                                            errors.push(f"Missing value for option: --{raw_k}")
                                         end
                                     end
                                 else
@@ -459,7 +459,7 @@ pub function app_parse(app: CliApp, raw_args: array) -> CliContext
                                                 end
                                             end
                                         else
-                                            errors.push("Missing value for option: -{s_char}")
+                                            errors.push(f"Missing value for option: -{s_char}")
                                         end
                                     end
                                 else
@@ -537,7 +537,7 @@ pub function app_parse(app: CliApp, raw_args: array) -> CliContext
                                     if sub_match is not null and sub_match != 0
                                         active_cmd = sub_match
                                         let sub_name = str_from_ptr(sub_match.cmd_name)
-                                        command_name = "{command_name} {sub_name}"
+                                        command_name = f"{command_name} {sub_name}"
                                         _cli_populate_defaults(sub_match.cmd_options, flags, options, array_options)
                                         matched_sub = true
                                         idx += 1
@@ -587,7 +587,7 @@ pub function app_parse(app: CliApp, raw_args: array) -> CliContext
                 end
             end
             if has_val == false
-                errors.push("Missing required option: --{l}")
+                errors.push(f"Missing required option: --{l}")
             end
         end
 
@@ -603,7 +603,7 @@ pub function app_parse(app: CliApp, raw_args: array) -> CliContext
             if len(chosen_val) > 0
                 if chosen_val not in opt.opt_choices
                     let allowed = _cli_join_array(opt.opt_choices, ", ")
-                    errors.push("Invalid value '{chosen_val}' for option --{l}. Allowed choices: [{allowed}]")
+                    errors.push(f"Invalid value '{chosen_val}' for option --{l}. Allowed choices: [{allowed}]")
                 end
             end
         end
@@ -638,7 +638,7 @@ pub function app_parse(app: CliApp, raw_args: array) -> CliContext
                 pi += 1
             else
                 if adef.arg_required == true
-                    errors.push("Missing required argument: <{aname}>")
+                    errors.push(f"Missing required argument: <{aname}>")
                 elif len(adef.arg_default) > 0
                     arg_map[aname] = str_from_ptr(adef.arg_default)
                 end

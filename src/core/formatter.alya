@@ -26,10 +26,10 @@ import "./utils.alya"
 pub function cli_format_help(app, cmd = 0) -> string
     let is_cmd = (cmd is not null and cmd != 0)
     let app_name = str_from_ptr(app.app_name)
-    let out = "Usage: {app_name}"
+    let out = f"Usage: {app_name}"
     if is_cmd
         let cmd_name = str_from_ptr(cmd.cmd_name)
-        out += " {cmd_name}"
+        out += f" {cmd_name}"
     else
         if len(app.app_commands) > 0
             out += " [COMMAND]"
@@ -48,11 +48,11 @@ pub function cli_format_help(app, cmd = 0) -> string
         for adef in arg_defs
             let aname = str_from_ptr(adef.arg_name)
             if adef.arg_variadic == true
-                out += " [{aname}...]"
+                out += f" [{aname}...]"
             elif adef.arg_required == true
-                out += " <{aname}>"
+                out += f" <{aname}>"
             else
-                out += " [{aname}]"
+                out += f" [{aname}]"
             end
         end
     end
@@ -72,7 +72,7 @@ pub function cli_format_help(app, cmd = 0) -> string
     end
 
     if len(desc) > 0
-        out += "{desc}\n\n"
+        out += f"{desc}\n\n"
     end
 
     # Commands Section
@@ -83,11 +83,11 @@ pub function cli_format_help(app, cmd = 0) -> string
                 let label = str_from_ptr(c.cmd_name)
                 if len(c.cmd_aliases) > 0
                     let alias_list = _cli_join_array(c.cmd_aliases, ", ")
-                    label += ", {alias_list}"
+                    label += f", {alias_list}"
                 end
                 let padded = _cli_pad_right(label, 16)
                 let cdesc = str_from_ptr(c.cmd_desc)
-                out += "  {padded} {cdesc}\n"
+                out += f"  {padded} {cdesc}\n"
             end
             out += "\n"
         end
@@ -98,11 +98,11 @@ pub function cli_format_help(app, cmd = 0) -> string
                 let label = str_from_ptr(sc.cmd_name)
                 if len(sc.cmd_aliases) > 0
                     let alias_list = _cli_join_array(sc.cmd_aliases, ", ")
-                    label += ", {alias_list}"
+                    label += f", {alias_list}"
                 end
                 let padded = _cli_pad_right(label, 16)
                 let scdesc = str_from_ptr(sc.cmd_desc)
-                out += "  {padded} {scdesc}\n"
+                out += f"  {padded} {scdesc}\n"
             end
             out += "\n"
         end
@@ -130,14 +130,14 @@ pub function cli_format_help(app, cmd = 0) -> string
         let label = ""
         if len(s) > 0
             if len(l) > 0
-                label = "-{s}, --{l}"
+                label = f"-{s}, --{l}"
             else
-                label = "-{s}"
+                label = f"-{s}"
             end
         elif len(l) > 0
-            label = "    --{l}"
+            label = f"    --{l}"
         else
-            label = "-{s}"
+            label = f"-{s}"
         end
 
         if opt.opt_is_flag == false
@@ -145,10 +145,10 @@ pub function cli_format_help(app, cmd = 0) -> string
         end
 
         let padded = _cli_pad_right(label, 26)
-        let line = "  {padded} {d}"
+        let line = f"  {padded} {d}"
         if opt.opt_is_flag == false
             if len(def) > 0
-                line += " (default: {def})"
+                line += f" (default: {def})"
             end
         end
         if opt.opt_required == true
@@ -156,9 +156,9 @@ pub function cli_format_help(app, cmd = 0) -> string
         end
         if len(opt.opt_choices) > 0
             let choice_list = _cli_join_array(opt.opt_choices, ", ")
-            line += " [choices: {choice_list}]"
+            line += f" [choices: {choice_list}]"
         end
-        out += "{line}\n"
+        out += f"{line}\n"
     end
     out += "  -h, --help                 Show help information\n"
     out += "  -V, --version              Show version information\n"
@@ -169,16 +169,16 @@ pub function cli_format_help(app, cmd = 0) -> string
         for adef in arg_defs
             let aname = str_from_ptr(adef.arg_name)
             let adesc = str_from_ptr(adef.arg_desc)
-            let alabel = "<{aname}>"
+            let alabel = f"<{aname}>"
             let padded = _cli_pad_right(alabel, 26)
-            let aline = "  {padded} {adesc}"
+            let aline = f"  {padded} {adesc}"
             if adef.arg_required == true
                 aline += " (required)"
             elif len(adef.arg_default) > 0
                 let adef_str = str_from_ptr(adef.arg_default)
-                aline += " (default: {adef_str})"
+                aline += f" (default: {adef_str})"
             end
-            out += "{aline}\n"
+            out += f"{aline}\n"
         end
     end
 
@@ -195,7 +195,7 @@ end
 pub function cli_format_version(app) -> string
     let vname = str_from_ptr(app.app_name)
     let vver = str_from_ptr(app.app_version)
-    return "{vname} {vver}"
+    return f"{vname} {vver}"
 end
 
 ## Formats an array of parsing and validation error messages into a diagnostics string.
@@ -209,7 +209,7 @@ pub function cli_format_errors(errors) -> string
     let out = ""
     for err in errors
         let emsg = str_from_ptr(err)
-        out += "Error: {emsg}\n"
+        out += f"Error: {emsg}\n"
     end
     return out
 end
