@@ -47,6 +47,13 @@ function main()
     bench_stop(runner, "cli::parse + query lookups (2k runs)")
 
     # 3. Formatter benchmark
+    bench_help_formatter(app, runner)
+
+    bench_summary(runner)
+end
+
+@cfg(feature = "help")
+function bench_help_formatter(app, runner)
     bench_start(runner, 20)
     let k = 0
     while k < 20
@@ -54,8 +61,12 @@ function main()
         k += 1
     end
     bench_stop(runner, "cli::help automated screen format (20 runs)")
-
-    bench_summary(runner)
 end
+
+@cfg(not(feature = "help"))
+# alya-lint: disable unused-param
+function bench_help_formatter(app, runner)
+end
+# alya-lint: enable unused-param
 
 main()
