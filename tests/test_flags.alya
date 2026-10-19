@@ -1,0 +1,94 @@
+## Test suite for the cli package: clustered flags, negated flags, attached values, and repeatable options
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
+import "std/test"
+import "../src/lib.alya" as cli
+
+function main()
+    test_suite("CLI Flags & Options Tests")
+    let r = runner_new()
+
+    let app = cli::new_app("adv-app", "Advanced options test", "1.0.0")
+    app.flag("-a, --all", "All items")
+    app.flag("-b, --buffer", "Buffer mode")
+    app.flag("-c, --clean", "Clean build")
+    app.flag("--color", "Colorized output")
+    app.option("-o, --output", "dist", "Output file")
+    app.multi_option("-I, --include", "Include directories")
+
+    # ═══════════════════════════════════════════════════════════
+    # 1. Clustered short flags: -abc
+    # ═══════════════════════════════════════════════════════════
+    let ctx1 = app.parse(["-abc"])
+    runner_assert_eq(r, ctx1.get_flag("a"), true, "clustered flag -a is enabled")
+    runner_assert_eq(r, ctx1.get_flag("all"), true, "clustered flag --all is enabled")
+    runner_assert_eq(r, ctx1.get_flag("b"), true, "clustered flag -b is enabled")
+    runner_assert_eq(r, ctx1.get_flag("buffer"), true, "clustered flag --buffer is enabled")
+    runner_assert_eq(r, ctx1.get_flag("c"), true, "clustered flag -c is enabled")
+    runner_assert_eq(r, ctx1.get_flag("clean"), true, "clustered flag --clean is enabled")
+
+    # ═══════════════════════════════════════════════════════════
+    # 2. Attached short option value: -oCustomPath.tar
+    # ═══════════════════════════════════════════════════════════
+    let ctx2 = app.parse(["-oMyCustomPath.tar"])
+    runner_assert_str_eq(r, ctx2.get_option("o"), "MyCustomPath.tar", "attached short option value is parsed")
+    runner_assert_str_eq(r, ctx2.get_option("output"), "MyCustomPath.tar", "attached value is visible under the long name")
+
+    # ═══════════════════════════════════════════════════════════
+    # 3. Negated flag: --no-color
+    # ═══════════════════════════════════════════════════════════
+    let ctx3 = app.parse(["--no-color"])
+    runner_assert_eq(r, ctx3.get_flag("color"), false, "--no-color disables the flag")
+    runner_assert_eq(r, ctx3.get_flag("no-color"), true, "the negated name is recorded as well")
+
+    # ═══════════════════════════════════════════════════════════
+    # 4. Repeatable option: -I a --include=b -I c
+    # ═══════════════════════════════════════════════════════════
+    let ctx4 = app.parse(["-I", "src/include", "--include=vendor/include", "-I", "third_party"])
+    let includes = ctx4.get_all("include")
+    runner_assert_eq(r, len(includes), 3, "every occurrence of the option is collected")
+    runner_assert_str_eq(r, str(includes[0]), "src/include", "the first include directory is kept")
+    runner_assert_str_eq(r, str(includes[1]), "vendor/include", "the second include directory is kept")
+    runner_assert_str_eq(r, str(includes[2]), "third_party", "the third include directory is kept")
+    runner_assert_eq(r, len(ctx4.get_all("I")), 3, "the short alias shares the same bucket")
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. The automatic help and version switches
+    # ═══════════════════════════════════════════════════════════
+    let ctx5 = app.parse(["--help"])
+    runner_assert_eq(r, ctx5.help_requested(), true, "help is requested through --help")
+    runner_assert_eq(r, ctx5.get_flag("help"), true, "the help flag is recorded")
+
+    let ctx6 = app.parse(["-h"])
+    runner_assert_eq(r, ctx6.help_requested(), true, "help is requested through -h")
+
+    let ctx7 = app.parse(["--version"])
+    runner_assert_eq(r, ctx7.version_requested(), true, "the version is requested through --version")
+    runner_assert_eq(r, ctx7.get_flag("version"), true, "the version flag is recorded")
+
+    let ctx8 = app.parse(["-V"])
+    runner_assert_eq(r, ctx8.version_requested(), true, "the version is requested through -V")
+
+    # ═══════════════════════════════════════════════════════════
+    # 6. A value option without a value
+    # ═══════════════════════════════════════════════════════════
+    let ctx9 = app.parse(["--output"])
+    runner_assert_eq(r, ctx9.has_errors(), true, "a missing option value is reported")
+    runner_assert_eq(r, len(ctx9.get_errors()), 1, "exactly one diagnostic is produced")
+    runner_assert_str_eq(r, ctx9.get_errors()[0].message, "Missing value for option: --output", "the diagnostic names the option")
+
+    # ═══════════════════════════════════════════════════════════
+    # 7. Flags and options keep independent namespaces
+    # ═══════════════════════════════════════════════════════════
+    let ctx10 = app.parse(["--all", "--output=out"])
+    runner_assert_eq(r, ctx10.get_flag("all"), true, "the flag is enabled")
+    runner_assert_str_eq(r, ctx10.get_option("output"), "out", "the option keeps its own value")
+    runner_assert_eq(r, ctx10.get_flag("output"), false, "an option is not reported as a flag")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

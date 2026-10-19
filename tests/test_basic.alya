@@ -1,68 +1,123 @@
-## Test suite for CLI basic features
+## Test suite for the cli package: application setup, flags, options, and positional binding
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
 import "std/test"
 import "../src/lib.alya" as cli
 
 function main()
-    test_suite("CLI Basic Functionality Tests")
+    test_suite("CLI Core Tests")
     let r = runner_new()
 
-    # 1. App creation and metadata
-    let app = cli::new("test-cli", "A modern test CLI", "1.5.0")
-    runner_assert_str_eq(r, app.app_name, "test-cli", "app name is test-cli")
-    runner_assert_str_eq(r, app.app_version, "1.5.0", "app version is 1.5.0")
+    # ═══════════════════════════════════════════════════════════
+    # 1. Application construction
+    # ═══════════════════════════════════════════════════════════
+    let app = cli::new_app("test-cli", "A modern test CLI", "1.5.0")
+    runner_assert_str_eq(r, app.name, "test-cli", "application name is test-cli")
+    runner_assert_str_eq(r, app.version, "1.5.0", "application version is 1.5.0")
+    runner_assert_str_eq(r, app.description, "A modern test CLI", "application description is kept")
+    runner_assert_eq(r, len(app.options), 0, "a fresh application declares no options")
 
-    # 2. Adding flags and options
-    cli::app_add_flag(app, "-v, --verbose", "Enable verbose mode")
-    cli::app_add_flag(app, "-d, --debug", "Enable debug mode")
-    cli::app_add_option(app, "-o, --output", "dist", "Output directory")
-    cli::app_add_option(app, "-e, --env", "dev", "Environment")
-    cli::app_add_argument(app, "input", "Input file")
+    # ═══════════════════════════════════════════════════════════
+    # 2. Fluent registration
+    # ═══════════════════════════════════════════════════════════
+    app.flag("-v, --verbose", "Enable verbose mode")
+    app.option("-o, --output", "dist", "Output directory")
+    app.argument("input", "Input file")
+    runner_assert_eq(r, len(app.options), 2, "two options were registered")
 
-    # 3. Parsing with long options and flags
-    let args1 = ["--verbose", "--output=build", "main.alya"]
-    let ctx1 = cli::parse(app, args1)
+    # ═══════════════════════════════════════════════════════════
+    # 3. Long options, inline values, and positional binding
+    # ═══════════════════════════════════════════════════════════
+    let ctx = app.parse(["--verbose", "--output=build", "main.alya"])
+    runner_assert_eq(r, ctx.get_flag("verbose"), true, "long flag is enabled")
+    runner_assert_eq(r, ctx.get_flag("v"), true, "short alias of the flag is enabled")
+    runner_assert_eq(r, ctx.get_flag("quiet"), false, "undeclared flag is disabled")
+    runner_assert_str_eq(r, ctx.get_option("output"), "build", "inline option value is parsed")
+    runner_assert_str_eq(r, ctx.get_option("o"), "build", "short alias of the option is parsed")
+    runner_assert_str_eq(r, ctx.get_arg_named("input"), "main.alya", "named argument is bound")
+    runner_assert_str_eq(r, ctx.get_arg(0), "main.alya", "positional value is bound by index")
+    runner_assert_eq(r, len(ctx.get_args()), 1, "one positional value was collected")
+    runner_assert_eq(r, ctx.has_errors(), false, "valid input produces no diagnostics")
+    runner_assert_eq(r, ctx.has("verbose"), true, "ctx.has reports the provided flag")
+    runner_assert_eq(r, ctx.has("output"), true, "ctx.has reports the provided option")
 
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "verbose"), true, "flag verbose is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "v"), true, "short flag v is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "debug"), false, "unspecified flag debug is 0")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "output"), "build", "output is build")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "o"), "build", "short opt o is build")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "env"), "dev", "default env is dev")
-    runner_assert_eq(r, len(cli::ctx_get_args(ctx1)), 1, "positional args count is 1")
-    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx1, "input"), "main.alya", "arg input is main.alya")
-    runner_assert_str_eq(r, cli::ctx_get_arg(ctx1, 0), "main.alya", "arg index 0 is main.alya")
+    # ═══════════════════════════════════════════════════════════
+    # 4. Short options with separated values
+    # ═══════════════════════════════════════════════════════════
+    let ctx2 = app.parse(["-v", "-o", "bin/out", "server.alya"])
+    runner_assert_eq(r, ctx2.get_flag("verbose"), true, "short flag -v enables verbose")
+    runner_assert_str_eq(r, ctx2.get_option("output"), "bin/out", "short option -o sets the value")
+    runner_assert_str_eq(r, ctx2.get_arg_named("input"), "server.alya", "positional binding still applies")
 
-    # 4. Parsing with short flags and space-separated option values
-    let args2 = ["-v", "-o", "bin/out", "-e", "prod", "server.alya"]
-    let ctx2 = cli::parse(app, args2)
+    # ═══════════════════════════════════════════════════════════
+    # 5. Defaults are applied for omitted options
+    # ═══════════════════════════════════════════════════════════
+    let ctx3 = app.parse([])
+    runner_assert_str_eq(r, ctx3.get_option("output"), "dist", "omitted option falls back to its default")
+    runner_assert_eq(r, ctx3.get_flag("verbose"), false, "omitted flag stays disabled")
+    runner_assert_eq(r, ctx3.has("output"), false, "ctx.has ignores options left at their default")
 
-    runner_assert_eq(r, cli::ctx_get_flag(ctx2, "verbose"), true, "short -v enables verbose")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "output"), "bin/out", "short -o sets output")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "env"), "prod", "short -e sets env")
-    runner_assert_str_eq(r, cli::ctx_get_arg(ctx2, 0), "server.alya", "arg 0 is server.alya")
+    # ═══════════════════════════════════════════════════════════
+    # 6. The `--` terminator stops option parsing
+    # ═══════════════════════════════════════════════════════════
+    let ctx4 = app.parse(["-v", "--", "--not-a-flag", "-o", "file.txt"])
+    runner_assert_eq(r, ctx4.get_flag("verbose"), true, "flag before -- is parsed")
+    runner_assert_eq(r, len(ctx4.get_args()), 3, "values after -- are kept as positionals")
+    runner_assert_str_eq(r, ctx4.get_arg(0), "--not-a-flag", "first raw value is preserved")
+    runner_assert_str_eq(r, ctx4.get_arg(1), "-o", "second raw value is preserved")
+    runner_assert_str_eq(r, ctx4.get_arg(2), "file.txt", "third raw value is preserved")
 
-    # 5. Double dash terminator --
-    let args3 = ["-v", "--", "--not-a-flag", "-o", "file.txt"]
-    let ctx3 = cli::parse(app, args3)
+    # ═══════════════════════════════════════════════════════════
+    # 7. Optional arguments with defaults and variadic arguments
+    # ═══════════════════════════════════════════════════════════
+    let app2 = cli::new_app("multi-arg", "Argument binding demo", "1.0.0")
+    app2.argument("mode", "Processing mode", false, "fast")
+    app2.variadic_argument("inputs", "Input files")
+    let ctx5 = app2.parse(["a.txt", "b.txt"])
+    runner_assert_str_eq(r, ctx5.get_arg_named("mode"), "a.txt", "the first positional fills the first argument")
+    runner_assert_eq(r, len(ctx5.get_args()), 2, "both positionals were collected")
+    runner_assert_eq(r, ctx5.has_errors(), false, "variadic argument accepts the remaining values")
 
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "verbose"), true, "verbose flag before -- parsed")
-    runner_assert_eq(r, len(cli::ctx_get_args(ctx3)), 3, "positional args after -- count is 3")
-    runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 0), "--not-a-flag", "first raw arg preserved")
-    runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 1), "-o", "second raw arg preserved")
-    runner_assert_str_eq(r, cli::ctx_get_arg(ctx3, 2), "file.txt", "third raw arg preserved")
+    let ctx6 = app2.parse([])
+    runner_assert_str_eq(r, ctx6.get_arg_named("mode"), "fast", "the argument default is applied")
+    runner_assert_eq(r, ctx6.has_errors(), false, "an omitted optional argument is not an error")
 
-    # 6. v0.0.18 Struct Methods and Enums
-    runner_assert_eq(r, cli::OptionArity.Flag, 0, "OptionArity.Flag is 0")
-    runner_assert_eq(r, cli::CommandType.Root, 0, "CommandType.Root is 0")
+    # ═══════════════════════════════════════════════════════════
+    # 8. Typed accessors
+    # ═══════════════════════════════════════════════════════════
+    let app3 = cli::new_app("typed", "Typed accessor demo", "1.0.0")
+    app3.option("--port", "8080", "Service port")
+    app3.option("--dry-run", "false", "Dry run switch")
+    let ctx7 = app3.parse(["--port=9090", "--dry-run=yes"])
+    runner_assert_eq(r, ctx7.get_int("port", 0), 9090, "numeric option converts to an integer")
+    runner_assert_eq(r, ctx7.get_int("port", 1), 9090, "numeric option ignores the fallback")
+    runner_assert_eq(r, ctx7.get_bool("dry-run"), true, "textual option converts to a boolean")
+    let ctx8 = app3.parse(["--port=not-a-number"])
+    runner_assert_eq(r, ctx8.get_int("port", 42), 42, "a non-numeric option falls back to the default")
 
-    let app4 = cli::new("fluent-cli", "Fluent API test", "2.0.0")
-    app4.flag("-x, --execute", "Execute immediately")
-    app4.option("-t, --tag", "latest", "Docker tag")
+    # ═══════════════════════════════════════════════════════════
+    # 9. Functional registration API
+    # ═══════════════════════════════════════════════════════════
+    let app4 = cli::new_app("functional", "Functional API demo", "1.0.0")
+    cli::add_flag(app4, "-d, --debug", "Debug mode")
+    cli::add_option(app4, "-c, --config", "app.toml", "Configuration file")
+    cli::add_required_option(app4, "--token", "Access token")
+    cli::add_choice_option(app4, "--format", "json", ["json", "yaml"], "Output format")
+    cli::add_multi_option(app4, "-I, --include", "Include directories")
+    runner_assert_eq(r, len(app4.options), 5, "five options were registered functionally")
+    let ctx9 = app4.parse(["--token=abc", "--format=yaml"])
+    runner_assert_str_eq(r, ctx9.get_option("config"), "app.toml", "functional registration keeps the default")
+    runner_assert_str_eq(r, ctx9.get_option("format"), "yaml", "functional registration parses the choice")
+    runner_assert_eq(r, ctx9.has_errors(), false, "the required option was supplied")
 
-    let ctx4 = app4.run(["-x", "--tag=v1.2"])
-    runner_assert_eq(r, ctx4.flag("execute"), true, "ctx4.flag struct method works")
-    runner_assert_str_eq(r, ctx4.option("tag"), "v1.2", "ctx4.option struct method works")
+    # ═══════════════════════════════════════════════════════════
+    # 10. Metadata mutators
+    # ═══════════════════════════════════════════════════════════
+    let app5 = cli::new_app("meta", "Metadata demo", "1.0.0")
+    app5.set_author("Alya Language Contributors")
+    app5.set_version("2.0.0")
+    runner_assert_str_eq(r, app5.author, "Alya Language Contributors", "the author is stored")
+    runner_assert_str_eq(r, app5.version, "2.0.0", "the version is updated")
 
     let failed = runner_summary(r)
     if failed > 0

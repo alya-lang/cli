@@ -1,0 +1,189 @@
+## cli Internal Helpers
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+## Shared string and model helpers for the specification, parser, and
+## formatter engines.
+##
+## This module deliberately declares no `pub` symbol: an Alya module without
+## public items shares its whole surface with sibling modules, so the helpers
+## below stay reachable inside the package while remaining invisible to
+## package consumers.
+
+import "std/str"
+import "../types.alya"
+
+# ───────────────────────────────────────────────────────────────
+# String helpers
+# ───────────────────────────────────────────────────────────────
+
+# Reports whether `s` begins with `prefix`.
+function internal_starts_with(s: string, prefix: string) -> bool
+    if len(s) < len(prefix)
+        return false
+    end
+    return s[0..len(prefix)] == prefix
+end
+
+# Removes the leading `--` or `-` dashes from an option name.
+function internal_strip_dashes(s: string) -> string
+    if internal_starts_with(s, "--")
+        return s[2..len(s)]
+    end
+    if internal_starts_with(s, "-")
+        return s[1..len(s)]
+    end
+    return s
+end
+
+# Returns the index of the first occurrence of `ch`, or -1 when absent.
+function internal_find_char(s: string, ch: string) -> int
+    let index = 0
+    while index < len(s)
+        if char_at(s, index) == ch
+            return index
+        end
+        index += 1
+    end
+    return -1
+end
+
+# Right-pads `s` with spaces up to `width` characters.
+function internal_pad_right(s: string, width: int) -> string
+    let padded = s
+    while len(padded) < width
+        padded += " "
+    end
+    return padded
+end
+
+# Joins the elements of `items` with `separator`.
+function internal_join(items: array, separator: string) -> string
+    let out = ""
+    let index = 0
+    while index < len(items)
+        if index > 0
+            out += separator
+        end
+        out += str(items[index])
+        index += 1
+    end
+    return out
+end
+
+# Splits a flag specification into its `[short_name, long_name]` parts.
+#
+# Accepts `"-v, --verbose"`, `"--output, -o"`, `"--verbose"`, and `"-v"`.
+function internal_parse_spec(spec: string) -> array
+    let raw = trim(spec)
+    let short_name = ""
+    let long_name = ""
+    if contains(raw, ",")
+        let parts = split(raw, ",")
+        let first = trim(str(parts[0]))
+        let second = trim(str(parts[1]))
+        if internal_starts_with(first, "--")
+            long_name = first[2..len(first)]
+        elif internal_starts_with(first, "-")
+            short_name = first[1..len(first)]
+        else
+            long_name = first
+        end
+        if internal_starts_with(second, "--")
+            long_name = second[2..len(second)]
+        elif internal_starts_with(second, "-")
+            short_name = second[1..len(second)]
+        else
+            long_name = second
+        end
+    else
+        if internal_starts_with(raw, "--")
+            long_name = raw[2..len(raw)]
+        elif internal_starts_with(raw, "-")
+            short_name = raw[1..len(raw)]
+        else
+            long_name = raw
+        end
+    end
+    return [short_name, long_name]
+end
+
+# Reports whether a textual value reads as a boolean true.
+function internal_is_truthy(value: string) -> bool
+    let text = trim(value)
+    if text == "1" or text == "true" or text == "yes" or text == "on"
+        return true
+    end
+    return false
+end
+
+# Converts a textual value to an integer, falling back when it is not numeric.
+function internal_to_int(value: string, fallback: int) -> int
+    let text = trim(value)
+    if len(text) == 0
+        return fallback
+    end
+    let negative = false
+    let body = text
+    if body[0..1] == "-"
+        negative = true
+        body = body[1..len(body)]
+    end
+    if body[0..1] == "+"
+        body = body[1..len(body)]
+    end
+    if len(body) == 0
+        return fallback
+    end
+    if contains(body, ".") or contains(body, "e") or contains(body, "E")
+        return fallback
+    end
+    if is_numeric(body) == false
+        return fallback
+    end
+    let parsed = to_int(body)
+    if negative == true
+        return 0 - parsed
+    end
+    return parsed
+end
+
+# ───────────────────────────────────────────────────────────────
+# Model helpers
+# ───────────────────────────────────────────────────────────────
+
+# Returns the index of the option matching `name`, or -1 when absent.
+#
+# Both the short and the long name of an option are accepted.
+function internal_find_option(options: array, name: string) -> int
+    let target = internal_strip_dashes(name)
+    let index = 0
+    while index < len(options)
+        let option: CliOption = options[index]
+        if len(option.short_name) > 0 and option.short_name == target
+            return index
+        end
+        if len(option.long_name) > 0 and option.long_name == target
+            return index
+        end
+        index += 1
+    end
+    return -1
+end
+
+# Returns the index of the command matching `name` or one of its aliases.
+function internal_find_command(commands: array, name: string) -> int
+    let index = 0
+    while index < len(commands)
+        let command: CliCommand = commands[index]
+        if command.name == name
+            return index
+        end
+        for alias in command.aliases
+            if str(alias) == name
+                return index
+            end
+        end
+        index += 1
+    end
+    return -1
+end

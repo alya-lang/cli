@@ -1,37 +1,44 @@
 ## Benchmark suite for the cli package
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+##
+## Measures the three hot paths of the package: building a specification,
+## parsing an argument array, and rendering a usage screen.
 
-import "std/bench"
+import "std/test"
 import "../src/lib.alya" as cli
 
 function main()
     let runner = bench_runner("Alya CLI Micro-Benchmarks")
 
-    # 1. App initialization and option definition
+    # ═══════════════════════════════════════════════════════════
+    # 1. Specification building
+    # ═══════════════════════════════════════════════════════════
     bench_start(runner, 2000)
     let i = 0
     while i < 2000
-        let app = cli::new("bench-cli", "Benchmark CLI tool", "1.0.0")
-        cli::app_add_flag(app, "-v, --verbose", "Enable verbose output")
-        cli::app_add_flag(app, "-d, --debug", "Enable debug output")
-        cli::app_add_option(app, "-o, --output", "dist", "Output target directory")
-        cli::app_add_option(app, "-f, --format", "json", "Serialization format")
-        let cmd = cli::command("build", "Build project artifacts")
-        cli::cmd_add_flag(cmd, "-r, --release", "Build in release mode")
-        cli::app_add_command(app, cmd)
+        let app = cli::new_app("bench-cli", "Benchmark CLI tool", "1.0.0")
+        app.flag("-v, --verbose", "Enable verbose output")
+        app.flag("-d, --debug", "Enable debug output")
+        app.option("-o, --output", "dist", "Output target directory")
+        app.option("-f, --format", "json", "Serialization format")
+        let cmd = cli::new_command("build", "Build project artifacts")
+        cmd.flag("-r, --release", "Build in release mode")
+        app.command(cmd)
         i += 1
     end
-    bench_stop(runner, "cli::new + flags/options/commands (2k runs)")
+    bench_stop(runner, "specification building (2k runs)")
 
+    # ═══════════════════════════════════════════════════════════
     # 2. Argument parsing
-    let app = cli::new("bench-cli", "Benchmark CLI tool", "1.0.0")
-    cli::app_add_flag(app, "-v, --verbose", "Enable verbose output")
-    cli::app_add_flag(app, "-d, --debug", "Enable debug output")
-    cli::app_add_option(app, "-o, --output", "dist", "Output target directory")
-    cli::app_add_option(app, "-f, --format", "json", "Serialization format")
-    let cmd = cli::command("build", "Build project artifacts")
-    cli::cmd_add_flag(cmd, "-r, --release", "Build in release mode")
-    cli::app_add_command(app, cmd)
+    # ═══════════════════════════════════════════════════════════
+    let app = cli::new_app("bench-cli", "Benchmark CLI tool", "1.0.0")
+    app.flag("-v, --verbose", "Enable verbose output")
+    app.flag("-d, --debug", "Enable debug output")
+    app.option("-o, --output", "dist", "Output target directory")
+    app.option("-f, --format", "json", "Serialization format")
+    let cmd = cli::new_command("build", "Build project artifacts")
+    cmd.flag("-r, --release", "Build in release mode")
+    app.command(cmd)
 
     let test_args = ["build", "-v", "--release", "--output=target/bin", "src/main.alya"]
 
@@ -39,34 +46,26 @@ function main()
     let j = 0
     while j < 2000
         let ctx = cli::parse(app, test_args)
-        cli::ctx_get_flag(ctx, "verbose")
-        cli::ctx_get_option(ctx, "output", "")
-        cli::ctx_get_command(ctx)
+        ctx.get_flag("verbose")
+        ctx.get_option("output", "")
+        ctx.get_command()
         j += 1
     end
-    bench_stop(runner, "cli::parse + query lookups (2k runs)")
+    bench_stop(runner, "argument parsing + lookups (2k runs)")
 
-    # 3. Formatter benchmark
-    bench_help_formatter(app, runner)
+    # ═══════════════════════════════════════════════════════════
+    # 3. Usage screen rendering
+    # ═══════════════════════════════════════════════════════════
+    @cfg(feature = "help")
+    bench_start(runner, 200)
+    let k = 0
+    while k < 200
+        cli::format_help(app)
+        k += 1
+    end
+    bench_stop(runner, "usage screen rendering (200 runs)")
 
     bench_summary(runner)
 end
-
-@cfg(feature = "help")
-function bench_help_formatter(app, runner)
-    bench_start(runner, 20)
-    let k = 0
-    while k < 20
-        cli::help(app)
-        k += 1
-    end
-    bench_stop(runner, "cli::help automated screen format (20 runs)")
-end
-
-@cfg(not(feature = "help"))
-# alya-lint: disable unused-param
-function bench_help_formatter(app, runner)
-end
-# alya-lint: enable unused-param
 
 main()

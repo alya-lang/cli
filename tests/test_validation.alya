@@ -1,5 +1,6 @@
-## Test suite for CLI validation: required options, allowed choices, and required arguments
+## Test suite for the cli package: required options, allowed choices, and unknown input
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
 import "std/test"
 import "../src/lib.alya" as cli
 
@@ -7,40 +8,84 @@ function main()
     test_suite("CLI Validation Tests")
     let r = runner_new()
 
-    let app = cli::new("valid-app", "Validation testing tool", "1.0.0")
-    cli::app_add_required_option(app, "-c, --config", "Configuration file path")
-    cli::app_add_choice_option(app, "--format", "json", ["json", "yaml", "table"], "Output format")
-    cli::app_add_argument(app, "target", "Target to deploy", true)
+    let app = cli::new_app("valid-app", "Validation testing tool", "1.0.0")
+    app.required_option("-c, --config", "Configuration file path")
+    app.choice_option("--format", "json", ["json", "yaml", "table"], "Output format")
+    app.argument("target", "Target to deploy", true)
 
-    # 1. Valid invocation
-    let ctx1 = cli::parse(app, ["--config=app.conf", "--format=yaml", "production"])
-    runner_assert_eq(r, cli::ctx_has_errors(ctx1), false, "valid args have 0 errors")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "config"), "app.conf", "config option set")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "format"), "yaml", "format option set")
-    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx1, "target"), "production", "target arg set")
+    # ═══════════════════════════════════════════════════════════
+    # 1. A valid invocation
+    # ═══════════════════════════════════════════════════════════
+    let ctx1 = app.parse(["--config=app.conf", "--format=yaml", "production"])
+    runner_assert_eq(r, ctx1.has_errors(), false, "a valid invocation produces no diagnostics")
+    runner_assert_str_eq(r, ctx1.get_option("config"), "app.conf", "the required option is parsed")
+    runner_assert_str_eq(r, ctx1.get_option("format"), "yaml", "the choice option is parsed")
+    runner_assert_str_eq(r, ctx1.get_arg_named("target"), "production", "the required argument is bound")
 
-    # 2. Missing required option --config
-    let ctx2 = cli::parse(app, ["--format=json", "production"])
-    runner_assert_eq(r, cli::ctx_has_errors(ctx2), true, "missing config triggers error")
-    let errs2 = cli::ctx_get_errors(ctx2)
-    runner_assert_eq(r, len(errs2), 1, "1 error for missing config")
-    let e0 = str_from_ptr(errs2[0])
-    runner_assert_eq(r, contains(e0, "Missing required option: --config"), true, "error message contains config")
+    # ═══════════════════════════════════════════════════════════
+    # 2. A missing required option
+    # ═══════════════════════════════════════════════════════════
+    let ctx2 = app.parse(["--format=json", "production"])
+    runner_assert_eq(r, ctx2.has_errors(), true, "the missing option is reported")
+    runner_assert_eq(r, len(ctx2.get_errors()), 1, "exactly one diagnostic is produced")
+    let first = ctx2.get_errors()[0]
+    runner_assert_eq(r, first.code, cli::ErrorCode.MissingRequired, "the diagnostic carries the expected code")
+    runner_assert_str_eq(r, first.subject, "config", "the diagnostic names the option")
+    runner_assert_str_eq(r, first.message, "Missing required option: --config", "the diagnostic explains the problem")
 
-    # 3. Invalid choice for --format
-    let ctx3 = cli::parse(app, ["-c", "app.conf", "--format=xml", "production"])
-    runner_assert_eq(r, cli::ctx_has_errors(ctx3), true, "invalid choice xml triggers error")
-    let errs3 = cli::ctx_get_errors(ctx3)
-    let e1 = str_from_ptr(errs3[0])
-    runner_assert_eq(r, contains(e1, "Invalid value 'xml'"), true, "error message contains xml")
-    runner_assert_eq(r, contains(e1, "Allowed choices"), true, "error message specifies allowed choices")
+    # ═══════════════════════════════════════════════════════════
+    # 3. A value outside the allowed choices
+    # ═══════════════════════════════════════════════════════════
+    let ctx3 = app.parse(["-c", "app.conf", "--format=xml", "production"])
+    runner_assert_eq(r, ctx3.has_errors(), true, "an invalid choice is reported")
+    let choice_error = ctx3.get_errors()[0]
+    runner_assert_eq(r, choice_error.code, cli::ErrorCode.InvalidChoice, "the diagnostic carries the expected code")
+    runner_assert_eq(r, contains(choice_error.message, "Invalid value 'xml'"), true, "the diagnostic quotes the value")
+    runner_assert_eq(r, contains(choice_error.message, "Allowed choices"), true, "the diagnostic lists the allowed values")
 
-    # 4. Missing required positional argument <target>
-    let ctx4 = cli::parse(app, ["--config=test.conf"])
-    runner_assert_eq(r, cli::ctx_has_errors(ctx4), true, "missing required argument triggers error")
-    let errs4 = cli::ctx_get_errors(ctx4)
-    let e2 = str_from_ptr(errs4[0])
-    runner_assert_eq(r, contains(e2, "Missing required argument: <target>"), true, "error message specifies <target>")
+    # ═══════════════════════════════════════════════════════════
+    # 4. A missing required argument
+    # ═══════════════════════════════════════════════════════════
+    let ctx4 = app.parse(["--config=test.conf"])
+    runner_assert_eq(r, ctx4.has_errors(), true, "the missing argument is reported")
+    let argument_error = ctx4.get_errors()[0]
+    runner_assert_eq(r, argument_error.code, cli::ErrorCode.MissingArgument, "the diagnostic carries the expected code")
+    runner_assert_eq(r, contains(argument_error.message, "Missing required argument: <target>"), true, "the diagnostic names the argument")
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. An unknown option
+    # ═══════════════════════════════════════════════════════════
+    let ctx5 = app.parse(["--config=test.conf", "--nope", "target"])
+    runner_assert_eq(r, ctx5.has_errors(), true, "the unknown option is reported")
+    let unknown = ctx5.get_errors()[0]
+    runner_assert_eq(r, unknown.code, cli::ErrorCode.UnknownOption, "the diagnostic carries the expected code")
+    runner_assert_str_eq(r, unknown.message, "Unknown option: --nope", "the diagnostic names the option")
+
+    # ═══════════════════════════════════════════════════════════
+    # 6. An unknown command
+    # ═══════════════════════════════════════════════════════════
+    let app2 = cli::new_app("router", "Command routing demo", "1.0.0")
+    let known = cli::new_command("build", "Compile artifacts")
+    app2.command(known)
+    let ctx6 = app2.parse(["deploy"])
+    runner_assert_eq(r, ctx6.has_errors(), true, "the unknown command is reported")
+    let command_error = ctx6.get_errors()[0]
+    runner_assert_eq(r, command_error.code, cli::ErrorCode.UnknownCommand, "the diagnostic carries the expected code")
+    runner_assert_str_eq(r, command_error.message, "Unknown command: deploy", "the diagnostic names the command")
+
+    # ═══════════════════════════════════════════════════════════
+    # 7. A negated flag on a value option
+    # ═══════════════════════════════════════════════════════════
+    let ctx7 = app.parse(["--config=test.conf", "--no-format", "target"])
+    runner_assert_eq(r, ctx7.has_errors(), true, "the invalid negation is reported")
+    runner_assert_eq(r, ctx7.get_errors()[0].code, cli::ErrorCode.InvalidUsage, "the diagnostic carries the expected code")
+
+    # ═══════════════════════════════════════════════════════════
+    # 8. The help switch suppresses the unknown command diagnostic
+    # ═══════════════════════════════════════════════════════════
+    let ctx8 = app2.parse(["--help", "deploy"])
+    runner_assert_eq(r, ctx8.has_errors(), false, "the help switch silences the command diagnostic")
+    runner_assert_eq(r, ctx8.help_requested(), true, "the help switch is recorded")
 
     let failed = runner_summary(r)
     if failed > 0

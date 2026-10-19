@@ -1,0 +1,213 @@
+## cli Specification Builders
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+## Owns the construction of applications, commands, options, and positional
+## arguments. The public facade in `src/lib.alya` re-exports thin wrappers
+## over these builders, so this directory can grow into per-domain
+## subfolders without changing the public API shape.
+
+import "../types.alya"
+import "./internal.alya"
+
+# ───────────────────────────────────────────────────────────────
+# Private helpers
+# ───────────────────────────────────────────────────────────────
+
+# Registers an option inside the given option list.
+function spec_register_option(options: array, spec: string, description: string, default_value: string, kind: int, required: bool, choices: array, env_var: string)
+    let names = internal_parse_spec(spec)
+    let option = make_option(str(names[0]), str(names[1]), description, default_value, kind, required, choices, env_var)
+    options.push(option)
+end
+
+# Registers a positional argument inside the given argument list.
+function spec_register_argument(arguments: array, name: string, description: string, required: bool, default_value: string, variadic: bool)
+    let argument = make_argument(name, description, required, default_value, variadic)
+    arguments.push(argument)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Constructors
+# ───────────────────────────────────────────────────────────────
+
+## Creates an application specification.
+##
+## ### Parameters
+## - `name`: Executable name shown in usage screens.
+## - `description`: One-line summary shown in usage screens. Defaults to `""`.
+## - `version`: Version string shown by the version banner. Defaults to `"1.0.0"`.
+##
+## ### Returns
+## A newly initialized `CliApp` instance.
+##
+## ### Examples
+## ```alya
+## let app = app_new("mytool", "A build tool", "1.2.0")
+## ```
+pub function app_new(name: string, description: string = "", version: string = "1.0.0") -> CliApp
+    return make_app(name, description, version)
+end
+
+## Creates a command specification.
+##
+## ### Parameters
+## - `name`: Primary command name.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+## - `aliases`: Alternative names accepted for this command. Defaults to `[]`.
+##
+## ### Returns
+## A newly initialized `CliCommand` instance.
+##
+## ### Examples
+## ```alya
+## let build = cmd_new("build", "Compile artifacts", ["b"])
+## ```
+pub function cmd_new(name: string, description: string = "", aliases: array = []) -> CliCommand
+    return make_command(name, description, aliases)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Application mutators
+# ───────────────────────────────────────────────────────────────
+
+## Sets the author string of an application.
+pub function app_set_author(app: CliApp, author: string) -> CliApp
+    app.author = author
+    return app
+end
+
+## Sets the version string of an application.
+pub function app_set_version(app: CliApp, version: string) -> CliApp
+    app.version = version
+    return app
+end
+
+## Registers a boolean flag on an application.
+pub function app_add_flag(app: CliApp, spec: string, description: string = "") -> CliApp
+    let options = app.options
+    spec_register_option(options, spec, description, "", OptionKind.Flag, false, [], "")
+    return app
+end
+
+## Registers a single-value option on an application.
+pub function app_add_option(app: CliApp, spec: string, default_value: string = "", description: string = "") -> CliApp
+    let options = app.options
+    spec_register_option(options, spec, description, default_value, OptionKind.Value, false, [], "")
+    return app
+end
+
+## Registers a repeatable option on an application.
+pub function app_add_multi_option(app: CliApp, spec: string, description: string = "") -> CliApp
+    let options = app.options
+    spec_register_option(options, spec, description, "", OptionKind.Multi, false, [], "")
+    return app
+end
+
+## Registers a choice-restricted option on an application.
+pub function app_add_choice_option(app: CliApp, spec: string, default_value: string, choices: array, description: string = "") -> CliApp
+    let options = app.options
+    spec_register_option(options, spec, description, default_value, OptionKind.Value, false, choices, "")
+    return app
+end
+
+## Registers a mandatory option on an application.
+pub function app_add_required_option(app: CliApp, spec: string, description: string = "") -> CliApp
+    let options = app.options
+    spec_register_option(options, spec, description, "", OptionKind.Value, true, [], "")
+    return app
+end
+
+## Registers an option that falls back to an environment variable.
+pub function app_add_env_option(app: CliApp, spec: string, env_var: string, default_value: string = "", description: string = "") -> CliApp
+    let options = app.options
+    spec_register_option(options, spec, description, default_value, OptionKind.Value, false, [], env_var)
+    return app
+end
+
+## Registers a positional argument on an application.
+pub function app_add_argument(app: CliApp, name: string, description: string = "", required: bool = false, default_value: string = "") -> CliApp
+    let arguments = app.arguments
+    spec_register_argument(arguments, name, description, required, default_value, false)
+    return app
+end
+
+## Registers a variadic positional argument on an application.
+pub function app_add_variadic_argument(app: CliApp, name: string, description: string = "") -> CliApp
+    let arguments = app.arguments
+    spec_register_argument(arguments, name, description, false, "", true)
+    return app
+end
+
+## Registers a command on an application.
+pub function app_add_command(app: CliApp, command: CliCommand) -> CliApp
+    let commands = app.commands
+    commands.push(command)
+    return app
+end
+
+# ───────────────────────────────────────────────────────────────
+# Command mutators
+# ───────────────────────────────────────────────────────────────
+
+## Registers a boolean flag on a command.
+pub function cmd_add_flag(cmd: CliCommand, spec: string, description: string = "") -> CliCommand
+    let options = cmd.options
+    spec_register_option(options, spec, description, "", OptionKind.Flag, false, [], "")
+    return cmd
+end
+
+## Registers a single-value option on a command.
+pub function cmd_add_option(cmd: CliCommand, spec: string, default_value: string = "", description: string = "") -> CliCommand
+    let options = cmd.options
+    spec_register_option(options, spec, description, default_value, OptionKind.Value, false, [], "")
+    return cmd
+end
+
+## Registers a repeatable option on a command.
+pub function cmd_add_multi_option(cmd: CliCommand, spec: string, description: string = "") -> CliCommand
+    let options = cmd.options
+    spec_register_option(options, spec, description, "", OptionKind.Multi, false, [], "")
+    return cmd
+end
+
+## Registers a choice-restricted option on a command.
+pub function cmd_add_choice_option(cmd: CliCommand, spec: string, default_value: string, choices: array, description: string = "") -> CliCommand
+    let options = cmd.options
+    spec_register_option(options, spec, description, default_value, OptionKind.Value, false, choices, "")
+    return cmd
+end
+
+## Registers a mandatory option on a command.
+pub function cmd_add_required_option(cmd: CliCommand, spec: string, description: string = "") -> CliCommand
+    let options = cmd.options
+    spec_register_option(options, spec, description, "", OptionKind.Value, true, [], "")
+    return cmd
+end
+
+## Registers an option that falls back to an environment variable.
+pub function cmd_add_env_option(cmd: CliCommand, spec: string, env_var: string, default_value: string = "", description: string = "") -> CliCommand
+    let options = cmd.options
+    spec_register_option(options, spec, description, default_value, OptionKind.Value, false, [], env_var)
+    return cmd
+end
+
+## Registers a positional argument on a command.
+pub function cmd_add_argument(cmd: CliCommand, name: string, description: string = "", required: bool = false, default_value: string = "") -> CliCommand
+    let arguments = cmd.arguments
+    spec_register_argument(arguments, name, description, required, default_value, false)
+    return cmd
+end
+
+## Registers a variadic positional argument on a command.
+pub function cmd_add_variadic_argument(cmd: CliCommand, name: string, description: string = "") -> CliCommand
+    let arguments = cmd.arguments
+    spec_register_argument(arguments, name, description, false, "", true)
+    return cmd
+end
+
+## Nests a command under another command.
+pub function cmd_add_subcommand(parent: CliCommand, child: CliCommand) -> CliCommand
+    let subcommands = parent.subcommands
+    subcommands.push(child)
+    return parent
+end

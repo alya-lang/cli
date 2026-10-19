@@ -1,54 +1,101 @@
 ## Demo of the cli package
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+##
+## Builds a realistic command line tool, renders its usage screen, and
+## parses a simulated invocation.
 
 import "../src/lib.alya" as cli
 
 function main()
-    # 1. Initialize application
-    let app = cli::new("forge", "Alya high-performance build and test tool", "1.0.0")
-    cli::app_set_author(app, "Alya Language Contributors")
+    say "=== 1. Building the application ==="
+    let app = cli::new_app("forge", "Alya high-performance build and test tool", "1.0.0")
+    app.set_author("Alya Language Contributors")
 
-    # 2. Configure global flags and options
-    cli::app_add_flag(app, "-v, --verbose", "Enable verbose diagnostic logs")
-    cli::app_add_flag(app, "-q, --quiet", "Suppress all non-error output")
-    cli::app_add_option(app, "-c, --config", "forge.toml", "Configuration file path")
+    # Global options
+    app.flag("-v, --verbose", "Enable verbose diagnostic logs")
+    app.flag("-q, --quiet", "Suppress all non-error output")
+    app.option("-c, --config", "forge.toml", "Configuration file path")
+    app.env_option("--token", "FORGE_TOKEN", "", "Access token for the registry")
 
-    # 3. Add 'build' command with options and arguments
-    let build_cmd = cli::command("build", "Compile target source packages", ["b"])
-    cli::cmd_add_flag(build_cmd, "-r, --release", "Build optimized release binaries")
-    cli::cmd_add_option(build_cmd, "-o, --output", "dist", "Output directory")
-    cli::cmd_add_choice_option(build_cmd, "-t, --target", "native", ["native", "x64", "arm64"], "Target architecture")
-    cli::cmd_add_argument(build_cmd, "entrypoint", "Source file to compile", false, "src/main.alya")
-    cli::app_add_command(app, build_cmd)
+    # The `build` command
+    let build = cli::new_command("build", "Compile target source packages", ["b"])
+    build.flag("-r, --release", "Build optimized release binaries")
+    build.option("-o, --output", "dist", "Output directory")
+    build.choice_option("-t, --target", "native", ["native", "x64", "arm64"], "Target architecture")
+    build.argument("entrypoint", "Source file to compile", false, "src/main.alya")
+    app.command(build)
 
-    # 4. Add 'test' command
-    let test_cmd = cli::command("test", "Execute unit and integration tests", ["t"])
-    cli::cmd_add_flag(test_cmd, "-f, --fail-fast", "Abort on first test failure")
-    cli::app_add_command(app, test_cmd)
+    # The `test` command
+    let test_cmd = cli::new_command("test", "Execute unit and integration tests", ["t"])
+    test_cmd.flag("-f, --fail-fast", "Abort on the first test failure")
+    test_cmd.variadic_argument("filters", "Only run the matching test filters")
+    app.command(test_cmd)
 
-    # 5. Display automated help screen
-    say "=== Automated Help Screen Demo ==="
+    # The `remote` command with a nested subcommand
+    let remote = cli::new_command("remote", "Manage the configured remotes")
+    let remote_add = cli::new_command("add", "Add a new remote")
+    remote_add.argument("name", "Remote name")
+    remote_add.argument("url", "Remote URL")
+    remote.subcommand(remote_add)
+    app.command(remote)
+
+    say "Application '" + app.name + "' v" + app.version + " is ready."
+    say ""
+
+    # ═══════════════════════════════════════════════════════════
+    say "=== 2. Generated usage screen ==="
     @cfg(feature = "help")
-    say cli::help(app)
+    say cli::format_help(app)
 
-    # 6. Simulate parsing realistic CLI arguments
-    say "=== Parsing Simulated Command ==="
-    let sample_args = ["build", "-v", "--release", "--target=native", "-o", "bin/release", "server.alya"]
-    say "Running with args: build -v --release --target=native -o bin/release server.alya"
+    # ═══════════════════════════════════════════════════════════
+    say "=== 3. Parsing a simulated invocation ==="
+    let sample = ["build", "-v", "--release", "--target=native", "-o", "bin/release", "server.alya"]
+    say "forge " + "build -v --release --target=native -o bin/release server.alya"
+    say ""
 
-    let ctx = app.run(sample_args)
+    let ctx = app.parse(sample)
     if ctx.has_errors()
-        say "Errors encountered during parsing:"
-        for err in ctx.errors()
-            say "  * " + str_from_ptr(err)
+        say "Diagnostics:"
+        for error in ctx.get_errors()
+            say "  * " + error.message
         end
     else
-        say "Command executed : " + ctx.command()
-        say "Verbose mode     : " + (ctx.flag("verbose") == true ? "yes" : "no")
-        say "Release mode     : " + (ctx.flag("release") == true ? "yes" : "no")
-        say "Target arch      : " + ctx.option("target", "native")
-        say "Output path      : " + ctx.option("output", "dist")
-        say "Source file      : " + ctx.get_arg_named("entrypoint", "src/main.alya")
+        say "Command        : " + ctx.get_command()
+        say "Command path   : " + ctx.get_command_path()
+        say "Verbose mode   : " + (ctx.get_flag("verbose") == true ? "yes" : "no")
+        say "Release mode   : " + (ctx.get_flag("release") == true ? "yes" : "no")
+        say "Target arch    : " + ctx.get_option("target", "native")
+        say "Output path    : " + ctx.get_option("output", "dist")
+        say "Source file    : " + ctx.get_arg_named("entrypoint", "src/main.alya")
+        say "Config file    : " + ctx.get_option("config", "forge.toml")
+    end
+    say ""
+
+    # ═══════════════════════════════════════════════════════════
+    say "=== 4. Diagnostics for an invalid invocation ==="
+    let broken = app.parse(["deploy", "--format=xml"])
+    say "forge deploy --format=xml"
+    for error in broken.get_errors()
+        say "  * " + error.message
+    end
+    say ""
+
+    # ═══════════════════════════════════════════════════════════
+    say "=== 5. Nested subcommand routing ==="
+    let nested = app.parse(["remote", "add", "origin", "https://github.com/alya-lang/cli.git"])
+    say "Command path   : " + nested.get_command_path()
+    say "Remote name    : " + nested.get_arg_named("name")
+    say "Remote url     : " + nested.get_arg_named("url")
+    say ""
+
+    # ═══════════════════════════════════════════════════════════
+    say "=== 6. Strict parsing (structured errors) ==="
+    @cfg(feature = "strict")
+    let outcome = cli::try_parse(app, ["build", "--target=wasm"])
+    if outcome.is_error()
+        say "Rejected: " + outcome.message()
+    else
+        say "Accepted: " + outcome.context().get_option("target", "native")
     end
 end
 

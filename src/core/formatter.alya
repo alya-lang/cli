@@ -1,238 +1,282 @@
-## CLI Help and Screen Formatter
+## cli Usage Screen Formatter
 ##
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
-## Renders formatted help screens, version information, and error diagnostics.
+## Renders the banner, usage line, command list, option list, and argument
+## list of an application or one of its commands. Only compiled when the
+## `help` feature is active (default-on); `src/lib.alya` keeps a fallback
+## stub so callers get a clear descriptive error instead of an undefined
+## reference.
 
 import "../types.alya"
-import "./utils.alya"
+import "./internal.alya"
 
-## Formats the complete usage and help documentation for an application or command.
+# ───────────────────────────────────────────────────────────────
+# Private helpers
+# ───────────────────────────────────────────────────────────────
+
+# Builds the label of a command (`name` plus its aliases).
+function formatter_command_label(command: CliCommand) -> string
+    let label = command.name
+    if len(command.aliases) > 0
+        label += ", " + internal_join(command.aliases, ", ")
+    end
+    return label
+end
+
+# Builds the label of an option (`-s, --long <value>`).
+function formatter_option_label(option: CliOption) -> string
+    let label = ""
+    if len(option.short_name) > 0
+        label = "-" + option.short_name
+        if len(option.long_name) > 0
+            label += ", --" + option.long_name
+        end
+    else
+        label = "    --" + option.long_name
+    end
+    if option.kind != OptionKind.Flag
+        label += " <value>"
+    end
+    return label
+end
+
+# Builds the note of an option (description plus its constraints).
+function formatter_option_note(option: CliOption) -> string
+    let note = option.description
+    if option.kind != OptionKind.Flag
+        if len(option.default_value) > 0
+            note += " (default: " + option.default_value + ")"
+        end
+    end
+    if option.required == true
+        note += " (required)"
+    end
+    if len(option.choices) > 0
+        note += " [choices: " + internal_join(option.choices, ", ") + "]"
+    end
+    if len(option.env_var) > 0
+        note += " [env: " + option.env_var + "]"
+    end
+    return note
+end
+
+# Builds the label of a positional argument (`<name>`).
+function formatter_argument_label(argument: CliArgument) -> string
+    if argument.variadic == true
+        return "<" + argument.name + ">..."
+    end
+    return "<" + argument.name + ">"
+end
+
+# Builds the note of a positional argument.
+function formatter_argument_note(argument: CliArgument) -> string
+    let note = argument.description
+    if argument.required == true
+        note += " (required)"
+    elif len(argument.default_value) > 0
+        note += " (default: " + argument.default_value + ")"
+    end
+    return note
+end
+
+# Builds the usage placeholder of a positional argument.
+function formatter_argument_usage(argument: CliArgument) -> string
+    if argument.variadic == true
+        return " <" + argument.name + ">..."
+    end
+    if argument.required == true
+        return " <" + argument.name + ">"
+    end
+    return " [" + argument.name + "]"
+end
+
+# Renders aligned rows of labels and notes.
+function formatter_render_rows(labels: array, notes: array) -> string
+    let width = 0
+    for label in labels
+        if len(str(label)) > width
+            width = len(str(label))
+        end
+    end
+    let out = ""
+    let index = 0
+    while index < len(labels)
+        let label = internal_pad_right(str(labels[index]), width)
+        let note = str(notes[index])
+        if len(note) > 0
+            out += "  " + label + "  " + note + "\n"
+        else
+            out += "  " + label + "\n"
+        end
+        index += 1
+    end
+    return out
+end
+
+# Renders the usage screen from its resolved parts.
+function formatter_render(app: CliApp, heading: string, subtitle: string, commands: array, options: array, arguments: array) -> string
+    let out = ""
+
+    # Banner
+    let banner = app.name
+    if len(app.version) > 0
+        banner += " " + app.version
+    end
+    if len(app.description) > 0
+        banner += " - " + app.description
+    end
+    out += banner + "\n"
+
+    # Subtitle (the command description)
+    if len(subtitle) > 0
+        out += subtitle + "\n"
+    end
+    out += "\n"
+
+    # Usage
+    out += "Usage:\n  " + heading + "\n"
+
+    # Commands
+    if len(commands) > 0
+        let labels = []
+        let notes = []
+        for command in commands
+            labels.push(formatter_command_label(command))
+            notes.push(command.description)
+        end
+        out += "\nCommands:\n" + formatter_render_rows(labels, notes)
+    end
+
+    # Options
+    let labels = []
+    let notes = []
+    for option in options
+        labels.push(formatter_option_label(option))
+        notes.push(formatter_option_note(option))
+    end
+    labels.push("-h, --help")
+    notes.push("Show this help and exit")
+    labels.push("-V, --version")
+    notes.push("Show version information and exit")
+    out += "\nOptions:\n" + formatter_render_rows(labels, notes)
+
+    # Arguments
+    if len(arguments) > 0
+        labels = []
+        notes = []
+        for argument in arguments
+            labels.push(formatter_argument_label(argument))
+            notes.push(formatter_argument_note(argument))
+        end
+        out += "\nArguments:\n" + formatter_render_rows(labels, notes)
+    end
+
+    return out
+end
+
+# Builds the usage line of the application root.
+function formatter_root_usage(app: CliApp) -> string
+    let heading = app.name
+    if len(app.commands) > 0
+        heading += " [COMMAND]"
+    end
+    heading += " [OPTIONS]"
+    for argument in app.arguments
+        heading += formatter_argument_usage(argument)
+    end
+    return heading
+end
+
+# Builds the usage line of a command.
+function formatter_command_usage(app: CliApp, cmd: CliCommand, arguments: array) -> string
+    let heading = app.name + " " + cmd.name + " [OPTIONS]"
+    for argument in arguments
+        heading += formatter_argument_usage(argument)
+    end
+    return heading
+end
+
+# ───────────────────────────────────────────────────────────────
+# Public formatters
+# ───────────────────────────────────────────────────────────────
+
+## Formats the usage screen of an application.
 ##
-## Constructs structured sections for Usage syntax, Description, Commands/Subcommands,
-## Options, and Positional Arguments.
+## The screen contains the banner, the usage line, the command list, the
+## option list (including the automatic `-h`/`--help` and `-V`/`--version`
+## entries), and the positional argument list. Columns are aligned.
 ##
 ## ### Parameters
-## - `app`: The target `CliApp` instance.
-## - `cmd`: Optional `CliCommand` instance. If `0` or null, formats application root help.
+## - `app`: The application specification.
 ##
 ## ### Returns
-## The formatted multi-line help string.
+## The formatted multi-line usage screen.
 ##
 ## ### Examples
 ## ```alya
-## let help_str = cli_format_help(app)
-## say help_str
+## say format_help(app)
 ## ```
-pub function cli_format_help(app, cmd = 0) -> string
-    let is_cmd = (cmd is not null and cmd != 0)
-    let app_name = str_from_ptr(app.app_name)
-    let out = f"Usage: {app_name}"
-    if is_cmd
-        let cmd_name = str_from_ptr(cmd.cmd_name)
-        out += f" {cmd_name}"
-    else
-        if len(app.app_commands) > 0
-            out += " [COMMAND]"
-        end
-    end
-    out += " [OPTIONS]"
-
-    let arg_defs = app.app_arguments
-    if is_cmd
-        if len(cmd.cmd_arguments) > 0
-            arg_defs = cmd.cmd_arguments
-        end
-    end
-
-    if len(arg_defs) > 0
-        for adef in arg_defs
-            let aname = str_from_ptr(adef.arg_name)
-            if adef.arg_variadic == true
-                out += f" [{aname}...]"
-            elif adef.arg_required == true
-                out += f" <{aname}>"
-            else
-                out += f" [{aname}]"
-            end
-        end
-    end
-    out += "\n\n"
-
-    let desc = ""
-    if is_cmd
-        if len(cmd.cmd_desc) > 0
-            desc = str_from_ptr(cmd.cmd_desc)
-        end
-    end
-
-    if len(desc) == 0
-        if len(app.app_desc) > 0
-            desc = str_from_ptr(app.app_desc)
-        end
-    end
-
-    if len(desc) > 0
-        out += f"{desc}\n\n"
-    end
-
-    # Commands Section
-    if not is_cmd
-        if len(app.app_commands) > 0
-            out += "Commands:\n"
-            for c in app.app_commands
-                let label = str_from_ptr(c.cmd_name)
-                if len(c.cmd_aliases) > 0
-                    let alias_list = _cli_join_array(c.cmd_aliases, ", ")
-                    label += f", {alias_list}"
-                end
-                let padded = _cli_pad_right(label, 16)
-                let cdesc = str_from_ptr(c.cmd_desc)
-                out += f"  {padded} {cdesc}\n"
-            end
-            out += "\n"
-        end
-    else
-        if len(cmd.cmd_subcommands) > 0
-            out += "Subcommands:\n"
-            for sc in cmd.cmd_subcommands
-                let label = str_from_ptr(sc.cmd_name)
-                if len(sc.cmd_aliases) > 0
-                    let alias_list = _cli_join_array(sc.cmd_aliases, ", ")
-                    label += f", {alias_list}"
-                end
-                let padded = _cli_pad_right(label, 16)
-                let scdesc = str_from_ptr(sc.cmd_desc)
-                out += f"  {padded} {scdesc}\n"
-            end
-            out += "\n"
-        end
-    end
-
-    # Options Section
-    let opts = app.app_options
-    if is_cmd
-        let pool = []
-        for p1_opt in app.app_options
-            pool.push(p1_opt)
-        end
-        for p2_opt in cmd.cmd_options
-            pool.push(p2_opt)
-        end
-        opts = pool
-    end
-
-    out += "Options:\n"
-    for opt in opts
-        let s = str_from_ptr(opt.opt_short)
-        let l = str_from_ptr(opt.opt_long)
-        let d = str_from_ptr(opt.opt_desc)
-        let def = str_from_ptr(opt.opt_default)
-        let label = ""
-        if len(s) > 0
-            if len(l) > 0
-                label = f"-{s}, --{l}"
-            else
-                label = f"-{s}"
-            end
-        elif len(l) > 0
-            label = f"    --{l}"
-        else
-            label = f"-{s}"
-        end
-
-        if opt.opt_is_flag == false
-            label += " <value>"
-        end
-
-        let padded = _cli_pad_right(label, 26)
-        let line = f"  {padded} {d}"
-        if opt.opt_is_flag == false
-            if len(def) > 0
-                line += f" (default: {def})"
-            end
-        end
-        if opt.opt_required == true
-            line += " (required)"
-        end
-        if len(opt.opt_choices) > 0
-            let choice_list = _cli_join_array(opt.opt_choices, ", ")
-            line += f" [choices: {choice_list}]"
-        end
-        out += f"{line}\n"
-    end
-    out += "  -h, --help                 Show help information\n"
-    out += "  -V, --version              Show version information\n"
-
-    # Positional Arguments Section
-    if len(arg_defs) > 0
-        out += "\nArguments:\n"
-        for adef in arg_defs
-            let aname = str_from_ptr(adef.arg_name)
-            let adesc = str_from_ptr(adef.arg_desc)
-            let alabel = f"<{aname}>"
-            let padded = _cli_pad_right(alabel, 26)
-            let aline = f"  {padded} {adesc}"
-            if adef.arg_required == true
-                aline += " (required)"
-            elif len(adef.arg_default) > 0
-                let adef_str = str_from_ptr(adef.arg_default)
-                aline += f" (default: {adef_str})"
-            end
-            out += f"{aline}\n"
-        end
-    end
-
-    return out
+pub function format_help(app: CliApp) -> string
+    return formatter_render(app, formatter_root_usage(app), "", app.commands, app.options, app.arguments)
 end
 
-## Formats the application name and semantic version string.
+## Formats the usage screen of a single command.
+##
+## The screen lists the global options together with the command-scoped
+## ones, and the command arguments (falling back to the application
+## arguments when the command declares none).
 ##
 ## ### Parameters
-## - `app`: The target `CliApp` instance.
+## - `app`: The application specification.
+## - `cmd`: The command to render.
 ##
 ## ### Returns
-## Formatted version string (e.g. `"mytool 1.0.0"`).
-pub function cli_format_version(app) -> string
-    let vname = str_from_ptr(app.app_name)
-    let vver = str_from_ptr(app.app_version)
-    return f"{vname} {vver}"
+## The formatted multi-line usage screen.
+##
+## ### Examples
+## ```alya
+## say format_command_help(app, build)
+## ```
+pub function format_command_help(app: CliApp, cmd: CliCommand) -> string
+    let arguments = cmd.arguments
+    if len(arguments) == 0
+        arguments = app.arguments
+    end
+    let options = []
+    for option in cmd.options
+        options.push(option)
+    end
+    for option in app.options
+        options.push(option)
+    end
+    return formatter_render(app, formatter_command_usage(app, cmd, arguments), cmd.description, cmd.subcommands, options, arguments)
 end
 
-## Formats an array of parsing and validation error messages into a diagnostics string.
+## Formats the version banner of an application.
 ##
 ## ### Parameters
-## - `errors`: Array of error string messages.
+## - `app`: The application specification.
 ##
 ## ### Returns
-## Formatted error diagnostics string.
-pub function cli_format_errors(errors) -> string
+## The version string, e.g. `"mytool 1.2.0"`.
+pub function format_version(app: CliApp) -> string
+    if len(app.version) == 0
+        return app.name
+    end
+    return app.name + " " + app.version
+end
+
+## Formats a list of parse diagnostics into a report.
+##
+## ### Parameters
+## - `errors`: The diagnostics collected by the parsing engine.
+##
+## ### Returns
+## One `"Error: ..."` line per diagnostic.
+pub function format_errors(errors: array) -> string
     let out = ""
-    for err in errors
-        let emsg = str_from_ptr(err)
-        out += f"Error: {emsg}\n"
+    for error in errors
+        out += "Error: " + str(error.message) + "\n"
     end
     return out
-end
-
-## Formats help documentation for this application or subcommand.
-##
-## ### Parameters
-## - `self`: The target `CliApp` instance.
-## - `cmd`: Optional subcommand instance. Defaults to `0`.
-##
-## ### Returns
-## Formatted multi-line help string.
-pub function CliApp.format_help(self, cmd = 0) -> string
-    return cli_format_help(self, cmd)
-end
-
-## Formats name and version string for this application.
-##
-## ### Parameters
-## - `self`: The target `CliApp` instance.
-##
-## ### Returns
-## Formatted version string.
-pub function CliApp.format_version(self) -> string
-    return cli_format_version(self)
 end
