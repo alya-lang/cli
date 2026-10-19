@@ -6,6 +6,7 @@
 ## slim build.
 
 import "std/test"
+import "std/str"
 import "../src/lib.alya" as cli
 
 @cfg(not(feature = "help"))
@@ -79,6 +80,18 @@ function main()
     # ═══════════════════════════════════════════════════════════
     let error = cli::make_error(cli::ErrorCode.MissingRequired, "config", "Missing required option: --config")
     runner_assert_str_eq(r, cli::format_error(error), "CliError(config): Missing required option: --config", "the structured error renders subject and message")
+
+    # ═══════════════════════════════════════════════════════════
+    # 6. A command re-declaring a global option is listed once
+    # ═══════════════════════════════════════════════════════════
+    let app2 = cli::new_app("shadow", "Shadowed option demo", "1.0.0")
+    app2.option("--profile", "default", "Build profile")
+    let deploy = cli::new_command("deploy", "Deploy the application")
+    deploy.option("--profile", "release", "Deployment profile")
+    app2.command(deploy)
+    let shadow_help = cli::format_command_help(app2, deploy)
+    runner_assert_eq(r, count_matches(shadow_help, "--profile"), 1, "the re-declared option is listed once")
+    runner_assert_eq(r, contains(shadow_help, "(default: release)"), true, "the command scope wins over the global default")
 
     let failed = runner_summary(r)
     if failed > 0

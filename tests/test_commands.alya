@@ -88,6 +88,26 @@ function main()
     runner_assert_eq(r, len(ctx6.get_args()), 0, "the command name is not bound as a positional")
     runner_assert_str_eq(r, ctx6.get_command(), "run", "the command is still matched")
 
+    # ═══════════════════════════════════════════════════════════
+    # 7. A command re-declaring a global option
+    # ═══════════════════════════════════════════════════════════
+    let app4 = cli::new_app("shadow", "Shadowed option demo", "1.0.0")
+    app4.required_option("--profile", "Build profile")
+    let deploy = cli::new_command("deploy", "Deploy the application")
+    deploy.option("--profile", "release", "Deployment profile")
+    deploy.required_option("--token", "Access token")
+    app4.command(deploy)
+
+    # The value given before the command name survives the command scope.
+    let ctx7 = app4.parse(["--profile=staging", "deploy", "--token=abc"])
+    runner_assert_str_eq(r, ctx7.get_option("profile"), "staging", "the value given before the command is kept")
+    runner_assert_eq(r, ctx7.has_errors(), false, "the re-declared option produces no diagnostic")
+
+    # The shadowed global option is validated only once.
+    let ctx8 = app4.parse(["deploy"])
+    runner_assert_eq(r, ctx8.has_errors(), true, "the missing token is reported")
+    runner_assert_eq(r, len(ctx8.get_errors()), 1, "the re-declared option does not duplicate the diagnostic")
+
     let failed = runner_summary(r)
     if failed > 0
         exit(1)

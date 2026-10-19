@@ -247,7 +247,12 @@ pub function format_command_help(app: CliApp, cmd: CliCommand) -> string
         options.push(option)
     end
     for option in app.options
-        options.push(option)
+        # A command re-declaring a global option shadows it in the parser,
+        # so listing both would only confuse the reader.
+        let spec: CliOption = option
+        if internal_find_option(cmd.options, spec.short_name) < 0 and internal_find_option(cmd.options, spec.long_name) < 0
+            options.push(spec)
+        end
     end
     return formatter_render(app, formatter_command_usage(app, cmd, arguments), cmd.description, cmd.subcommands, options, arguments)
 end

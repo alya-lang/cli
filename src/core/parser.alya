@@ -59,28 +59,32 @@ function parser_merge_options(primary: array, secondary: array) -> array
 end
 
 # Seeds the default state of the given options into the scope.
+#
+# Names that were already provided are left untouched: a command that
+# re-declares a global option must not reset the value given before the
+# command name.
 function parser_seed_defaults(options: array, scope: ParseScope)
     for option in options
         let spec: CliOption = option
         if spec.kind == OptionKind.Flag
-            if len(spec.short_name) > 0
+            if len(spec.short_name) > 0 and spec.short_name not in scope.provided
                 scope.flags[spec.short_name] = false
             end
-            if len(spec.long_name) > 0
+            if len(spec.long_name) > 0 and spec.long_name not in scope.provided
                 scope.flags[spec.long_name] = false
             end
         elif spec.kind == OptionKind.Multi
-            if len(spec.short_name) > 0
+            if len(spec.short_name) > 0 and spec.short_name not in scope.provided
                 scope.multi_options[spec.short_name] = []
             end
-            if len(spec.long_name) > 0
+            if len(spec.long_name) > 0 and spec.long_name not in scope.provided
                 scope.multi_options[spec.long_name] = []
             end
         else
-            if len(spec.short_name) > 0
+            if len(spec.short_name) > 0 and spec.short_name not in scope.provided
                 scope.options[spec.short_name] = spec.default_value
             end
-            if len(spec.long_name) > 0
+            if len(spec.long_name) > 0 and spec.long_name not in scope.provided
                 scope.options[spec.long_name] = spec.default_value
             end
         end
@@ -261,6 +265,66 @@ function parser_env_value(name: string) -> string
     return ""
 end
 
+# Reports whether an option name was already handled by an earlier entry.
+function parser_option_seen(seen: array, option: CliOption) -> bool
+    if len(option.long_name) > 0 and option.long_name in seen
+        return true
+    end
+    if len(option.short_name) > 0 and option.short_name in seen
+        return true
+    end
+    return false
+end
+
+# Records the names of an option so later duplicates can be skipped.
+function parser_mark_seen(seen: array, option: CliOption)
+    if len(option.long_name) > 0
+        seen.push(option.long_name)
+    end
+    if len(option.short_name) > 0
+        seen.push(option.short_name)
+    end
+end
+
+# Validates one option and collects the diagnostics it produces.
+function parser_validate_option(spec: CliOption, scope: ParseScope)
+    let short_name = spec.short_name
+    let long_name = spec.long_name
+    let display_name = long_name
+    if len(display_name) == 0
+        display_name = short_name
+    end
+
+    let current = ""
+    if long_name in scope.options
+        current = str(scope.options[long_name])
+    elif short_name in scope.options
+        current = str(scope.options[short_name])
+    end
+
+    # Environment fallback for omitted options.
+    if len(current) == 0 and len(spec.env_var) > 0
+        let fallback = parser_env_value(spec.env_var)
+        if len(fallback) > 0
+            current = fallback
+            for key in parser_option_names(spec, display_name)
+                scope.options[key] = fallback
+            end
+        end
+    end
+
+    if spec.required == true and len(current) == 0
+        scope.errors.push(make_error(ErrorCode.MissingRequired, display_name, "Missing required option: --" + display_name))
+    end
+
+    if len(spec.choices) > 0 and len(current) > 0
+        if current not in spec.choices
+            let allowed = internal_join(spec.choices, ", ")
+            scope.errors.push(make_error(ErrorCode.InvalidChoice, display_name, "Invalid value '" + current + "' for option --" + display_name + ". Allowed choices: [" + allowed + "]"))
+        end
+    end
+end
+
 # ───────────────────────────────────────────────────────────────
 # Parsing engine
 # ───────────────────────────────────────────────────────────────
@@ -374,43 +438,15 @@ pub function parse(app: CliApp, raw_args: array) -> CliContext
     end
 
     # ── Validation of the effective option set ──
+    # A command re-declaring a global option shadows it, so the first
+    # definition of a name wins and is validated only once.
+    let seen = []
     for option in lookup_options
         let spec: CliOption = option
-        let short_name = spec.short_name
-        let long_name = spec.long_name
-        let display_name = long_name
-        if len(display_name) == 0
-            display_name = short_name
+        if parser_option_seen(seen, spec) == false
+            parser_validate_option(spec, scope)
         end
-
-        let current = ""
-        if long_name in scope.options
-            current = str(scope.options[long_name])
-        elif short_name in scope.options
-            current = str(scope.options[short_name])
-        end
-
-        # Environment fallback for omitted options.
-        if len(current) == 0 and len(spec.env_var) > 0
-            let fallback = parser_env_value(spec.env_var)
-            if len(fallback) > 0
-                current = fallback
-                for key in parser_option_names(spec, display_name)
-                    scope.options[key] = fallback
-                end
-            end
-        end
-
-        if spec.required == true and len(current) == 0
-            scope.errors.push(make_error(ErrorCode.MissingRequired, display_name, "Missing required option: --" + display_name))
-        end
-
-        if len(spec.choices) > 0 and len(current) > 0
-            if current not in spec.choices
-                let allowed = internal_join(spec.choices, ", ")
-                scope.errors.push(make_error(ErrorCode.InvalidChoice, display_name, "Invalid value '" + current + "' for option --" + display_name + ". Allowed choices: [" + allowed + "]"))
-            end
-        end
+        parser_mark_seen(seen, spec)
     end
 
     # ── Unknown command detection ──
