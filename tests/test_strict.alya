@@ -59,6 +59,8 @@ function main()
     runner_assert_eq(r, ok_result.is_ok(), true, "the recovering parse reports success on valid input")
     runner_assert_eq(r, ok_result.is_error(), false, "the recovering parse does not report a failure")
     runner_assert_str_eq(r, ok_result.message(), "", "a successful result carries no diagnostic")
+    runner_assert_str_eq(r, ok_result.context().get_option("config"), "app.toml", "the result carries the parsed context")
+    runner_assert_eq(r, ok_result.context().has_errors(), false, "the carried context is free of diagnostics")
 
     let failed = runner_summary(r)
     if failed > 0

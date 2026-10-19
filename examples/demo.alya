@@ -91,11 +91,19 @@ function main()
     # ═══════════════════════════════════════════════════════════
     say "=== 6. Strict parsing (structured errors) ==="
     @cfg(feature = "strict")
-    let outcome = cli::try_parse(app, ["build", "--target=wasm"])
-    if outcome.is_error()
-        say "Rejected: " + outcome.message()
+    let rejected = cli::try_parse(app, ["build", "--target=wasm"])
+    if rejected.is_error()
+        say "Rejected: " + rejected.message()
     else
-        say "Accepted: " + outcome.context().get_option("target", "native")
+        say "Accepted: " + rejected.context().get_option("target", "native")
+    end
+
+    @cfg(feature = "strict")
+    let accepted = cli::try_parse(app, ["build", "--target=native"])
+    if accepted.is_ok()
+        say "Accepted: " + accepted.context().get_option("target", "native")
+    else
+        say "Rejected: " + accepted.message()
     end
 end
 

@@ -2,7 +2,36 @@
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
 
 import "std/test"
+@cfg(feature = "env")
+import "std/os"
 import "../src/lib.alya" as cli
+
+# Verifies the environment fallback of an option.
+#
+# The positive path needs the variable in the process environment; run the
+# suite with `ALYA_CLI_TEST_ENV=value alya test` to cover it. The command
+# line always wins over the environment.
+@cfg(feature = "env")
+function assert_env_fallback(r)
+    let app = cli::new_app("env-app", "Environment fallback demo", "1.0.0")
+    app.env_option("--token", "ALYA_CLI_TEST_ENV", "fallback", "Access token")
+
+    let ctx = app.parse([])
+    if has_env("ALYA_CLI_TEST_ENV") == true
+        runner_assert_str_eq(r, ctx.get_option("token"), env("ALYA_CLI_TEST_ENV"), "the environment variable provides the option value")
+    else
+        runner_assert_str_eq(r, ctx.get_option("token"), "fallback", "the default is kept when the environment variable is unset")
+    end
+    runner_assert_eq(r, ctx.has("token"), false, "an environment provided value does not count as provided on the command line")
+
+    let ctx2 = app.parse(["--token=explicit"])
+    runner_assert_str_eq(r, ctx2.get_option("token"), "explicit", "the command line value wins over the environment")
+    runner_assert_eq(r, ctx2.has("token"), true, "a command line value counts as provided")
+end
+
+@cfg(not(feature = "env"))
+function assert_env_fallback(r)
+end
 
 function main()
     test_suite("CLI Core Tests")
@@ -118,6 +147,11 @@ function main()
     app5.set_version("2.0.0")
     runner_assert_str_eq(r, app5.author, "Alya Language Contributors", "the author is stored")
     runner_assert_str_eq(r, app5.version, "2.0.0", "the version is updated")
+
+    # ═══════════════════════════════════════════════════════════
+    # 10. Environment-backed options
+    # ═══════════════════════════════════════════════════════════
+    assert_env_fallback(r)
 
     let failed = runner_summary(r)
     if failed > 0

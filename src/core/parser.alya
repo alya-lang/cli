@@ -302,8 +302,14 @@ function parser_validate_option(spec: CliOption, scope: ParseScope)
         current = str(scope.options[short_name])
     end
 
-    # Environment fallback for omitted options.
-    if len(current) == 0 and len(spec.env_var) > 0
+    # Environment fallback for omitted options. The lookup is driven by the
+    # `provided` map, not by the current value: an option with a non-empty
+    # default would otherwise never fall back to the environment.
+    let was_provided = false
+    if long_name in scope.provided or short_name in scope.provided
+        was_provided = true
+    end
+    if was_provided == false and len(spec.env_var) > 0
         let fallback = parser_env_value(spec.env_var)
         if len(fallback) > 0
             current = fallback

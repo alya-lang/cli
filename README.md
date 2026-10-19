@@ -262,6 +262,13 @@ main()
 > [!TIP]
 > **Internal Helpers & Documentation:** Public symbols are documented with `##` Markdown docstrings, enabling automatic API documentation generation via `alya doc`. The helpers in `src/core/internal.alya` are not annotated with `pub` and stay encapsulated within the package.
 
+### Behaviour Notes
+
+- **Unknown input is reported, not ignored.** An option or a command that the specification does not declare produces a diagnostic (`UnknownOption` / `UnknownCommand`) instead of being silently accepted.
+- **The command scope wins.** When a command re-declares a global option, the command definition is authoritative: the option is listed once in the usage screen, it is validated once (so no diagnostic is duplicated), and a value given *before* the command name is kept instead of being reset to the command default.
+- **The command line wins over the environment.** An option registered with `env_option` reads its environment variable only when the option was not given on the command line. An environment provided value does not count as provided for `has()`.
+- **Diagnostics are values, not strings.** `get_errors()` returns `CliError` values: `err.code` classifies the failure, `err.subject` names the offending option, argument, or command, and `err.message` explains it. Rebuild a diagnostic with `make_error(...)` before throwing it — a value read back from the untyped diagnostics array loses its struct identity when it crosses a `throw`.
+
 ---
 
 ## 🧪 Running Tests & Benchmarks

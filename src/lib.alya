@@ -1066,3 +1066,24 @@ end
 pub function CliResult.message(self: CliResult) -> string
     return self.error
 end
+
+## Returns the parsed context of a strict parse.
+##
+## The context is empty when the parse failed; check `is_ok()` first.
+##
+## ### Parameters
+## - `self`: The target `CliResult` instance.
+##
+## ### Returns
+## The parsed `CliContext`.
+##
+## ### Examples
+## ```alya
+## let result = try_parse(app, args())
+## if result.is_ok()
+##     say result.context().get_option("output", "dist")
+## end
+## ```
+pub function CliResult.context(self: CliResult) -> CliContext
+    return self.context
+end
