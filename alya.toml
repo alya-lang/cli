@@ -1,16 +1,32 @@
 [package]
 name = "cli"
-version = "0.1.0"
-alya-version = "0.0.19"
+version = "0.2.0"
+alya-version = "0.0.21"
 entry = "src/lib.alya"
-description = "Modern command-line interface, argument parsing, flag handling, and subcommand router for Alya"
+description = "Modern command-line toolkit for Alya with typed flags, options, subcommand routing, generated help screens, and structured parse errors"
 authors = ["Alya Language Contributors <https://github.com/alya-lang>"]
 license = "MIT"
 homepage = "https://github.com/alya-lang/alya"
 repository = "https://github.com/alya-lang/cli"
-keywords = ["alya", "alya-lang", "package", "cli", "argparse", "flags", "subcommands", "terminal"]
+keywords = ["alya", "alya-lang", "package", "cli", "argparse", "flags", "subcommands", "help", "terminal"]
 
 [dependencies]
+
+# Optional: feature-gated API slices. Members name another feature or an
+# optional dependency; gate the using code with `@cfg(feature = "...")`
+# and provide a `@cfg(not(feature = "..."))` fallback stub in `src/lib.alya`
+# so callers get a clear descriptive error instead of an undefined reference.
+# `help` renders the usage screens and version banner
+# (`src/core/formatter.alya`), `strict` adds the throwing and recovering
+# parse entry points (`src/core/errors.alya`), and `env` lets options fall
+# back to environment variables (`std/os`). `default` is active unless the
+# caller passes `--no-default-features`; select features explicitly via
+# `alya build/run/test/bench/install --features <a,b>`.
+[features]
+default = ["help", "strict", "env"]
+help = []
+strict = []
+env = []
 
 # [lint]
 # disabled_rules = []
@@ -24,7 +40,3 @@ keywords = ["alya", "alya-lang", "package", "cli", "argparse", "flags", "subcomm
 
 # [bench]
 # exclude = []
-
-[features]
-default = ["help"]
-help = []

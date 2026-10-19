@@ -70,6 +70,12 @@ jobs:
         run: |
           alya test
 
+      - name: Run package test suite without default features
+        env:
+          ALYA_TEST_TIMEOUT_SECS: '600'
+        run: |
+          alya test --no-default-features
+
       - name: Run micro-benchmarks smoke test
         if: hashFiles('benches/bench_basic.alya') != ''
         run: |

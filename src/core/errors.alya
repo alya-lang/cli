@@ -1,0 +1,74 @@
+## cli Strict Parsing Slice (feature-gated)
+##
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
+## Adds the throwing and recovering parse entry points on top of the lenient
+## engine in `src/core/parser.alya`: `parse_strict` aborts on the first
+## diagnostic, `try_parse` converts the diagnostic into a result container.
+##
+## Only compiled when the `strict` feature is active (default-on);
+## `src/lib.alya` keeps fallback stubs so callers get a clear descriptive
+## error instead of an undefined reference.
+
+import "../types.alya"
+import "./parser.alya" as parser
+
+## Parses an argument array, throwing a structured error on invalid input.
+##
+## ### Parameters
+## - `app`: The application specification driving the parse.
+## - `raw_args`: The argument array to parse.
+##
+## ### Returns
+## A `CliContext` without diagnostics.
+##
+## ### Examples
+## ```alya
+## try
+##     let ctx = parse_strict(app, args())
+## catch err
+##     say format_caught_error(err)
+## end
+## ```
+pub function parse_strict(app: CliApp, raw_args: array) -> CliContext
+    let ctx = parser::parse(app, raw_args)
+    if len(ctx.errors) > 0
+        # Rebuild the diagnostic as a typed value: throwing a value read back
+        # from the untyped diagnostics array would lose the struct identity.
+        let first: CliError = ctx.errors[0]
+        throw make_error(first.code, first.subject, first.message)
+    end
+    return ctx
+end
+
+## Parses an argument array, converting failures into a result container.
+##
+## ### Parameters
+## - `app`: The application specification driving the parse.
+## - `raw_args`: The argument array to parse.
+##
+## ### Returns
+## A `CliResult` carrying either the parsed context or the first diagnostic.
+##
+## ### Examples
+## ```alya
+## let result = try_parse(app, args())
+## if result.is_error()
+##     say result.message()
+## end
+## ```
+pub function try_parse(app: CliApp, raw_args: array) -> CliResult
+    let ctx = parser::parse(app, raw_args)
+    if len(ctx.errors) > 0
+        let first: CliError = ctx.errors[0]
+        return CliResult {
+            ok: false,
+            context: ctx,
+            error: format_error(first)
+        }
+    end
+    return CliResult {
+        ok: true,
+        context: ctx,
+        error: ""
+    }
+end

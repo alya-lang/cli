@@ -1,10 +1,14 @@
-## Test suite for help text and error screen formatting
+## Test suite for the cli package: usage screens, version banner, and diagnostic reports
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+##
+## The `help` feature owns the usage screen renderer. Without it there is
+## nothing to format, so the file keeps a skip stub and stays green in the
+## slim build.
+
 import "std/test"
+import "std/str"
 import "../src/lib.alya" as cli
 
-# Without the `help` feature there is nothing to format: register an
-# empty suite so the file still compiles and passes in the slim view.
 @cfg(not(feature = "help"))
 function main()
     test_suite("CLI Formatter Tests (skipped without help feature)")
@@ -20,46 +24,74 @@ function main()
     test_suite("CLI Formatter Tests")
     let r = runner_new()
 
-    let app = cli::new("dock-tool", "A container management CLI", "2.1.0")
-    cli::app_add_flag(app, "-v, --verbose", "Verbose logging output")
-    cli::app_add_option(app, "-H, --host", "tcp://127.0.0.1:2375", "Daemon socket host")
+    let app = cli::new_app("dock-tool", "A container management CLI", "2.1.0")
+    app.flag("-v, --verbose", "Verbose logging output")
+    app.option("-H, --host", "tcp://127.0.0.1:2375", "Daemon socket host")
+    app.argument("image", "Image to run", true)
 
-    let run_cmd = cli::command("run", "Run a command in a new container", ["r"])
-    cli::cmd_add_flag(run_cmd, "-d, --detach", "Run container in background")
-    cli::cmd_add_argument(run_cmd, "image", "Container image name", true)
-    cli::cmd_add_argument(run_cmd, "cmd", "Command to execute", false, "bash")
-    cli::app_add_command(app, run_cmd)
+    let run = cli::new_command("run", "Run a command in a new container", ["r"])
+    run.flag("-d, --detach", "Run container in background")
+    run.argument("image", "Container image name", true)
+    run.argument("cmd", "Command to execute", false, "bash")
+    app.command(run)
 
-    # 1. Top-level help formatting
-    let h = cli::help(app)
-    runner_assert_eq(r, contains(h, "Usage: dock-tool [COMMAND] [OPTIONS]"), true, "help usage line")
-    runner_assert_eq(r, contains(h, "A container management CLI"), true, "help description")
-    runner_assert_eq(r, contains(h, "Commands:"), true, "help commands header")
-    runner_assert_eq(r, contains(h, "run, r"), true, "help lists run with alias r")
-    runner_assert_eq(r, contains(h, "-v, --verbose"), true, "help lists verbose flag")
-    runner_assert_eq(r, contains(h, "-H, --host <value>"), true, "help lists host option")
-    runner_assert_eq(r, contains(h, "(default: tcp://127.0.0.1:2375)"), true, "help shows host default")
-    runner_assert_eq(r, contains(h, "-h, --help"), true, "help lists automated help flag")
-    runner_assert_eq(r, contains(h, "-V, --version"), true, "help lists automated version flag")
+    # ═══════════════════════════════════════════════════════════
+    # 1. The application usage screen
+    # ═══════════════════════════════════════════════════════════
+    let help = cli::format_help(app)
+    runner_assert_eq(r, contains(help, "dock-tool 2.1.0 - A container management CLI"), true, "the banner carries name, version, and description")
+    runner_assert_eq(r, contains(help, "Usage:"), true, "the usage section is present")
+    runner_assert_eq(r, contains(help, "dock-tool [COMMAND] [OPTIONS] <image>"), true, "the usage line lists the command, options, and arguments")
+    runner_assert_eq(r, contains(help, "Commands:"), true, "the command section is present")
+    runner_assert_eq(r, contains(help, "run, r"), true, "the command is listed with its alias")
+    runner_assert_eq(r, contains(help, "-v, --verbose"), true, "the flag is listed")
+    runner_assert_eq(r, contains(help, "-H, --host <value>"), true, "the option is listed with its value placeholder")
+    runner_assert_eq(r, contains(help, "(default: tcp://127.0.0.1:2375)"), true, "the option default is shown")
+    runner_assert_eq(r, contains(help, "-h, --help"), true, "the automatic help switch is listed")
+    runner_assert_eq(r, contains(help, "-V, --version"), true, "the automatic version switch is listed")
+    runner_assert_eq(r, contains(help, "Arguments:"), true, "the argument section is present")
+    runner_assert_eq(r, contains(help, "<image>"), true, "the argument is listed")
+    runner_assert_eq(r, contains(help, "(required)"), true, "the required marker is shown")
 
-    # 2. Command-specific help formatting
-    let h_cmd = cli::help(app, run_cmd)
-    runner_assert_eq(r, contains(h_cmd, "Usage: dock-tool run [OPTIONS] <image> [cmd]"), true, "command usage with args")
-    runner_assert_eq(r, contains(h_cmd, "Run a command in a new container"), true, "command description")
-    runner_assert_eq(r, contains(h_cmd, "-d, --detach"), true, "command detach flag")
-    runner_assert_eq(r, contains(h_cmd, "<image>"), true, "command arguments image")
-    runner_assert_eq(r, contains(h_cmd, "(required)"), true, "command argument required indicator")
-    runner_assert_eq(r, contains(h_cmd, "(default: bash)"), true, "command argument default indicator")
+    # ═══════════════════════════════════════════════════════════
+    # 2. The command usage screen
+    # ═══════════════════════════════════════════════════════════
+    let command_help = cli::format_command_help(app, run)
+    runner_assert_eq(r, contains(command_help, "dock-tool run [OPTIONS] <image> [cmd]"), true, "the command usage line lists its arguments")
+    runner_assert_eq(r, contains(command_help, "Run a command in a new container"), true, "the command description is shown")
+    runner_assert_eq(r, contains(command_help, "-d, --detach"), true, "the command flag is listed")
+    runner_assert_eq(r, contains(command_help, "(default: bash)"), true, "the argument default is shown")
 
-    # 3. Version string formatting
-    let ver_str = cli::cli_format_version(app)
-    runner_assert_str_eq(r, ver_str, "dock-tool 2.1.0", "cli_format_version produces app version")
+    # ═══════════════════════════════════════════════════════════
+    # 3. The version banner
+    # ═══════════════════════════════════════════════════════════
+    runner_assert_str_eq(r, cli::format_version(app), "dock-tool 2.1.0", "the version banner joins name and version")
 
-    # 4. Error formatting
-    let errs = ["Missing option: --host", "Invalid image name"]
-    let err_screen = cli::cli_format_errors(errs)
-    runner_assert_eq(r, contains(err_screen, "Error: Missing option: --host"), true, "formatted error 1")
-    runner_assert_eq(r, contains(err_screen, "Error: Invalid image name"), true, "formatted error 2")
+    # ═══════════════════════════════════════════════════════════
+    # 4. The diagnostic report
+    # ═══════════════════════════════════════════════════════════
+    let errors = [cli::make_error(cli::ErrorCode.MissingValue, "host", "Missing value for option: --host"), cli::make_error(cli::ErrorCode.InvalidChoice, "format", "Invalid value 'xml' for option --format. Allowed choices: [json, yaml]")]
+    let report = cli::format_errors(errors)
+    runner_assert_eq(r, contains(report, "Error: Missing value for option: --host"), true, "the first diagnostic is rendered")
+    runner_assert_eq(r, contains(report, "Error: Invalid value 'xml'"), true, "the second diagnostic is rendered")
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. The structured error formatter
+    # ═══════════════════════════════════════════════════════════
+    let error = cli::make_error(cli::ErrorCode.MissingRequired, "config", "Missing required option: --config")
+    runner_assert_str_eq(r, cli::format_error(error), "CliError(config): Missing required option: --config", "the structured error renders subject and message")
+
+    # ═══════════════════════════════════════════════════════════
+    # 6. A command re-declaring a global option is listed once
+    # ═══════════════════════════════════════════════════════════
+    let app2 = cli::new_app("shadow", "Shadowed option demo", "1.0.0")
+    app2.option("--profile", "default", "Build profile")
+    let deploy = cli::new_command("deploy", "Deploy the application")
+    deploy.option("--profile", "release", "Deployment profile")
+    app2.command(deploy)
+    let shadow_help = cli::format_command_help(app2, deploy)
+    runner_assert_eq(r, count_matches(shadow_help, "--profile"), 1, "the re-declared option is listed once")
+    runner_assert_eq(r, contains(shadow_help, "(default: release)"), true, "the command scope wins over the global default")
 
     let failed = runner_summary(r)
     if failed > 0

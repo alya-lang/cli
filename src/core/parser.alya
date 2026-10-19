@@ -1,987 +1,763 @@
-## CLI Core Parser Implementation
+## cli Parsing Engine
 ##
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
-## Manages options, arguments, commands, subcommands, and parsing lifecycle.
+## Turns a raw argument array into a resolved `CliContext`: token
+## classification, option binding, subcommand routing, positional binding,
+## and validation. Headless by design — no I/O, only data transformation.
+##
+## The engine is forgiving: diagnostics are collected in `ctx.errors`
+## instead of aborting, so a caller decides whether to print them, exit, or
+## continue. The strict slice in `src/core/errors.alya` layers the throwing
+## and recovering variants on top of this engine.
 
 import "../types.alya"
-import "./utils.alya"
+import "./internal.alya"
+@cfg(feature = "env")
+import "std/os"
 
-# --- Public Constructors & Mutators ---
+# ───────────────────────────────────────────────────────────────
+# Private state
+# ───────────────────────────────────────────────────────────────
 
-## Constructs a new `CliApp` root application instance.
-##
-## ### Parameters
-## - `name`: The executable application name.
-## - `description`: Brief description shown in help text.
-## - `version`: Semantic version string. Defaults to `"1.0.0"`.
-##
-## ### Returns
-## A newly initialized `CliApp` instance.
-pub function app_new(name: string, description: string = "", version: string = "1.0.0") -> CliApp
-    return CliApp { app_name: name, app_desc: description, app_version: version, app_author: "", app_options: [], app_arguments: [], app_commands: [] }
+# Mutable parsing state shared by the scan helpers.
+struct ParseScope
+    flags: map,
+    options: map,
+    multi_options: map,
+    provided: map,
+    errors: array
 end
 
-## Returns the application executable name.
-pub function app_get_name(app: CliApp) -> string
-    return str_from_ptr(app.app_name)
-end
+# ───────────────────────────────────────────────────────────────
+# Private helpers
+# ───────────────────────────────────────────────────────────────
 
-## Returns the application version string.
-pub function app_get_version(app: CliApp) -> string
-    return str_from_ptr(app.app_version)
-end
-
-## Sets the author string, returning the updated app.
-pub function app_set_author(app: CliApp, author: string) -> CliApp
-    app.app_author = author
-    return app
-end
-
-## Sets the version string, returning the updated app.
-pub function app_set_version(app: CliApp, version: string) -> CliApp
-    app.app_version = version
-    return app
-end
-
-## Registers a boolean toggle flag, returning the updated app.
-pub function app_add_flag(app: CliApp, flags_spec, description: string = "") -> CliApp
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "0", opt_is_flag: true, opt_is_multi: false, opt_required: false, opt_choices: [] }
-    let opts = app.app_options
-    opts.push(opt)
-    return app
-end
-
-## Registers a single-value option, returning the updated app.
-pub function app_add_option(app: CliApp, flags_spec, default_val: string = "", description: string = "") -> CliApp
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: false, opt_is_multi: false, opt_required: false, opt_choices: [] }
-    let opts = app.app_options
-    opts.push(opt)
-    return app
-end
-
-## Registers a repeatable multi-value option, returning the updated app.
-pub function app_add_multi_option(app: CliApp, flags_spec, description: string = "") -> CliApp
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: false, opt_is_multi: true, opt_required: false, opt_choices: [] }
-    let opts = app.app_options
-    opts.push(opt)
-    return app
-end
-
-## Registers a constrained-choice option, returning the updated app.
-pub function app_add_choice_option(app: CliApp, flags_spec, default_val: string, choices: array, description: string = "") -> CliApp
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: false, opt_is_multi: false, opt_required: false, opt_choices: choices }
-    let opts = app.app_options
-    opts.push(opt)
-    return app
-end
-
-## Registers a mandatory option, returning the updated app.
-pub function app_add_required_option(app: CliApp, flags_spec, description: string = "") -> CliApp
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: false, opt_is_multi: false, opt_required: true, opt_choices: [] }
-    let opts = app.app_options
-    opts.push(opt)
-    return app
-end
-
-## Registers a positional argument, returning the updated app.
-pub function app_add_argument(app: CliApp, name: string, description: string = "", required: int = false, default_val: string = "") -> CliApp
-    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: required, arg_default: default_val, arg_variadic: false }
-    let args_list = app.app_arguments
-    args_list.push(arg)
-    return app
-end
-
-## Registers a variadic positional argument, returning the updated app.
-pub function app_add_variadic_argument(app: CliApp, name: string, description: string = "") -> CliApp
-    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: false, arg_default: "", arg_variadic: true }
-    let args_list = app.app_arguments
-    args_list.push(arg)
-    return app
-end
-
-## Registers a subcommand, returning the updated app.
-pub function app_add_command(app: CliApp, cmd: CliCommand) -> CliApp
-    let cmds = app.app_commands
-    cmds.push(cmd)
-    return app
-end
-
-# --- Subcommand Constructors & Modifiers ---
-
-## Constructs a new subcommand model instance.
-pub function cmd_new(name: string, description: string = "", aliases: array = []) -> CliCommand
-    return CliCommand { cmd_name: name, cmd_aliases: aliases, cmd_desc: description, cmd_options: [], cmd_arguments: [], cmd_subcommands: [] }
-end
-
-## Returns the subcommand name.
-pub function cmd_get_name(cmd: CliCommand) -> string
-    return str_from_ptr(cmd.cmd_name)
-end
-
-## Registers a boolean flag on a subcommand.
-pub function cmd_add_flag(cmd: CliCommand, flags_spec, description: string = "") -> CliCommand
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "0", opt_is_flag: true, opt_is_multi: false, opt_required: false, opt_choices: [] }
-    let opts = cmd.cmd_options
-    opts.push(opt)
-    return cmd
-end
-
-## Registers a single-value option on a subcommand.
-pub function cmd_add_option(cmd: CliCommand, flags_spec, default_val: string = "", description: string = "") -> CliCommand
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: false, opt_is_multi: false, opt_required: false, opt_choices: [] }
-    let opts = cmd.cmd_options
-    opts.push(opt)
-    return cmd
-end
-
-## Registers a repeatable option on a subcommand.
-pub function cmd_add_multi_option(cmd: CliCommand, flags_spec, description: string = "") -> CliCommand
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: false, opt_is_multi: true, opt_required: false, opt_choices: [] }
-    let opts = cmd.cmd_options
-    opts.push(opt)
-    return cmd
-end
-
-## Registers a constrained-choice option on a subcommand.
-pub function cmd_add_choice_option(cmd: CliCommand, flags_spec, default_val: string, choices: array, description: string = "") -> CliCommand
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: default_val, opt_is_flag: false, opt_is_multi: false, opt_required: false, opt_choices: choices }
-    let opts = cmd.cmd_options
-    opts.push(opt)
-    return cmd
-end
-
-## Registers a mandatory option on a subcommand.
-pub function cmd_add_required_option(cmd: CliCommand, flags_spec, description: string = "") -> CliCommand
-    let names = _cli_parse_flags_spec(flags_spec)
-    let s = str_from_ptr(names[0])
-    let l = str_from_ptr(names[1])
-    let opt = CliOption { opt_short: s, opt_long: l, opt_desc: description, opt_default: "", opt_is_flag: false, opt_is_multi: false, opt_required: true, opt_choices: [] }
-    let opts = cmd.cmd_options
-    opts.push(opt)
-    return cmd
-end
-
-## Registers a positional argument on a subcommand.
-pub function cmd_add_argument(cmd: CliCommand, name: string, description: string = "", required: int = false, default_val: string = "") -> CliCommand
-    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: required, arg_default: default_val, arg_variadic: false }
-    let args_list = cmd.cmd_arguments
-    args_list.push(arg)
-    return cmd
-end
-
-## Registers a variadic argument on a subcommand.
-pub function cmd_add_variadic_argument(cmd: CliCommand, name: string, description: string = "") -> CliCommand
-    let arg = CliArgument { arg_name: name, arg_desc: description, arg_required: false, arg_default: "", arg_variadic: true }
-    let args_list = cmd.cmd_arguments
-    args_list.push(arg)
-    return cmd
-end
-
-## Nests a subcommand, returning the updated parent.
-pub function cmd_add_subcommand(parent_cmd: CliCommand, sub_cmd: CliCommand) -> CliCommand
-    let subs = parent_cmd.cmd_subcommands
-    subs.push(sub_cmd)
-    return parent_cmd
-end
-
-# --- Lookup Helpers (Internal) ---
-
-function _cli_lookup_opt_in_list(opt_list, name)
-    let clean = _cli_strip_dashes(name)
-    for opt in opt_list
-        let s = str_from_ptr(opt.opt_short)
-        let l = str_from_ptr(opt.opt_long)
-        if len(s) > 0 and s == clean
-            return opt
-        end
-        if len(l) > 0 and l == clean
-            return opt
-        end
+# Classifies an argument token.
+function parser_classify(token: string) -> int
+    if internal_starts_with(token, "--no-") == true
+        return TokenKind.Inverted
     end
-    return null
-end
-
-function _cli_lookup_opt(app, active_cmd, name)
-    if active_cmd is not null and active_cmd != 0
-        let match = _cli_lookup_opt_in_list(active_cmd.cmd_options, name)
-        if match is not null and match != 0
-            return match
-        end
+    if internal_starts_with(token, "--") == true
+        return TokenKind.Long
     end
-    return _cli_lookup_opt_in_list(app.app_options, name)
-end
-
-function _cli_lookup_cmd(commands, name)
-    let target = str_from_ptr(name)
-    for c in commands
-        if str_from_ptr(c.cmd_name) == target
-            return c
-        end
-        if target in c.cmd_aliases
-            return c
-        end
+    if internal_starts_with(token, "-") == true and token != "-"
+        return TokenKind.Short
     end
-    return null
+    return TokenKind.Positional
 end
 
-function _cli_populate_defaults(opt_list, flags, options, array_options)
-    for opt in opt_list
-        let s = str_from_ptr(opt.opt_short)
-        let l = str_from_ptr(opt.opt_long)
-        let def_val = str_from_ptr(opt.opt_default)
-        if opt.opt_is_flag == true
-            if len(s) > 0
-                flags[s] = false
+# Merges two option lists, keeping the first list in front.
+function parser_merge_options(primary: array, secondary: array) -> array
+    let merged = []
+    for option in primary
+        merged.push(option)
+    end
+    for option in secondary
+        merged.push(option)
+    end
+    return merged
+end
+
+# Seeds the default state of the given options into the scope.
+#
+# Names that were already provided are left untouched: a command that
+# re-declares a global option must not reset the value given before the
+# command name.
+function parser_seed_defaults(options: array, scope: ParseScope)
+    for option in options
+        let spec: CliOption = option
+        if spec.kind == OptionKind.Flag
+            if len(spec.short_name) > 0 and spec.short_name not in scope.provided
+                scope.flags[spec.short_name] = false
             end
-            if len(l) > 0
-                flags[l] = false
+            if len(spec.long_name) > 0 and spec.long_name not in scope.provided
+                scope.flags[spec.long_name] = false
+            end
+        elif spec.kind == OptionKind.Multi
+            if len(spec.short_name) > 0 and spec.short_name not in scope.provided
+                scope.multi_options[spec.short_name] = []
+            end
+            if len(spec.long_name) > 0 and spec.long_name not in scope.provided
+                scope.multi_options[spec.long_name] = []
             end
         else
-            if opt.opt_is_multi == true
-                if len(s) > 0
-                    array_options[s] = []
-                end
-                if len(l) > 0
-                    array_options[l] = []
-                end
+            if len(spec.short_name) > 0 and spec.short_name not in scope.provided
+                scope.options[spec.short_name] = spec.default_value
+            end
+            if len(spec.long_name) > 0 and spec.long_name not in scope.provided
+                scope.options[spec.long_name] = spec.default_value
+            end
+        end
+    end
+end
+
+# Collects every distinct name an option answers to.
+function parser_option_names(option: CliOption, used_name: string) -> array
+    let names = []
+    if len(used_name) > 0
+        names.push(used_name)
+    end
+    let short_name = option.short_name
+    let long_name = option.long_name
+    if len(short_name) > 0 and short_name not in names
+        names.push(short_name)
+    end
+    if len(long_name) > 0 and long_name not in names
+        names.push(long_name)
+    end
+    return names
+end
+
+# Stores the state of a boolean flag under every known name.
+function parser_store_flag(option: CliOption, name: string, state: bool, scope: ParseScope)
+    for key in parser_option_names(option, name)
+        scope.flags[key] = state
+        scope.provided[key] = true
+    end
+end
+
+# Stores the value of a value or repeatable option under every known name.
+#
+# The short and the long name always share the same bucket, so a value given
+# as `-I src` is visible through `--include` as well.
+function parser_store_value(option: CliOption, name: string, value: string, scope: ParseScope)
+    for key in parser_option_names(option, name)
+        if option.kind == OptionKind.Multi
+            if key not in scope.multi_options
+                scope.multi_options[key] = []
+            end
+            let bucket = scope.multi_options[key]
+            bucket.push(value)
+        else
+            scope.options[key] = value
+        end
+        scope.provided[key] = true
+    end
+end
+
+# Applies a negated flag such as `--no-color`.
+function parser_apply_inverted(lookup_options: array, token: string, scope: ParseScope)
+    let base = token[5..len(token)]
+    let index = internal_find_option(lookup_options, base)
+    if index < 0
+        scope.errors.push(make_error(ErrorCode.UnknownOption, base, "Unknown option: --no-" + base))
+        return
+    end
+    let option: CliOption = lookup_options[index]
+    if option.kind != OptionKind.Flag
+        scope.errors.push(make_error(ErrorCode.InvalidUsage, base, "Option --" + base + " does not support the --no- form"))
+        return
+    end
+    scope.flags["no-" + base] = true
+    scope.provided["no-" + base] = true
+    for key in parser_option_names(option, base)
+        scope.flags[key] = false
+        scope.provided[key] = true
+    end
+end
+
+# Applies a long option, returning the index of the next token.
+function parser_apply_long(lookup_options: array, token: string, index: int, raw_args: array, scope: ParseScope) -> int
+    let token_length = len(token)
+    let separator = internal_find_char(token, "=")
+    let name = ""
+    let value = ""
+    let has_value = false
+    if separator >= 0
+        name = token[2..separator]
+        value = token[(separator + 1)..token_length]
+        has_value = true
+    else
+        name = token[2..token_length]
+    end
+
+    let option_index = internal_find_option(lookup_options, name)
+    if option_index < 0
+        scope.errors.push(make_error(ErrorCode.UnknownOption, name, "Unknown option: --" + name))
+        scope.flags[name] = true
+        return index + 1
+    end
+
+    let option: CliOption = lookup_options[option_index]
+    if option.kind == OptionKind.Flag
+        parser_store_flag(option, name, true, scope)
+        return index + 1
+    end
+
+    if has_value == false
+        if index + 1 >= len(raw_args)
+            scope.errors.push(make_error(ErrorCode.MissingValue, name, "Missing value for option: --" + name))
+            return index + 1
+        end
+        index += 1
+        value = str(raw_args[index])
+    end
+
+    parser_store_value(option, name, value, scope)
+    return index + 1
+end
+
+# Applies a short option or a cluster of short flags.
+function parser_apply_short(lookup_options: array, token: string, index: int, raw_args: array, scope: ParseScope) -> int
+    let token_length = len(token)
+    let short_name = token[1..2]
+    let option_index = internal_find_option(lookup_options, short_name)
+    if option_index < 0
+        scope.errors.push(make_error(ErrorCode.UnknownOption, short_name, "Unknown option: -" + short_name))
+        scope.flags[short_name] = true
+        return index + 1
+    end
+
+    let option: CliOption = lookup_options[option_index]
+    if token_length == 2
+        if option.kind == OptionKind.Flag
+            parser_store_flag(option, short_name, true, scope)
+            return index + 1
+        end
+        if index + 1 >= len(raw_args)
+            scope.errors.push(make_error(ErrorCode.MissingValue, short_name, "Missing value for option: -" + short_name))
+            return index + 1
+        end
+        index += 1
+        parser_store_value(option, short_name, str(raw_args[index]), scope)
+        return index + 1
+    end
+
+    if option.kind == OptionKind.Flag
+        # Clustered flags such as `-abc`.
+        let position = 1
+        while position < token_length
+            let letter = token[position..(position + 1)]
+            let cluster_index = internal_find_option(lookup_options, letter)
+            if cluster_index < 0
+                scope.errors.push(make_error(ErrorCode.UnknownOption, letter, "Unknown option: -" + letter))
+                scope.flags[letter] = true
             else
-                if len(s) > 0
-                    options[s] = def_val
-                end
-                if len(l) > 0
-                    options[l] = def_val
-                end
-            end
-        end
-    end
-end
-
-function _cli_classify_token(arg_str) -> int
-    let s = str(arg_str)
-    if _cli_starts_with(s, "--no-") == true
-        return ArgKind.InvertedFlag
-    end
-    if _cli_starts_with(s, "--") == true
-        return ArgKind.LongOption
-    end
-    if _cli_starts_with(s, "-") == true and s != "-"
-        return ArgKind.ShortOption
-    end
-    return ArgKind.Positional
-end
-
-# --- Parsing Engine ---
-
-## Parses argument strings into a resolved execution context.
-pub function app_parse(app: CliApp, raw_args: array) -> CliContext
-    let flags = {}
-    let options = {}
-    let array_options = {}
-    let positionals = []
-    let arg_map = {}
-    let errors = []
-    let command_name = ""
-    let active_cmd = null
-    let help_req = false
-    let version_req = false
-
-    # 1. Populate top-level defaults
-    _cli_populate_defaults(app.app_options, flags, options, array_options)
-
-    let num_raw = len(raw_args)
-    let idx = 0
-    let stop_options = false
-
-    while idx < num_raw
-        let arg_str = str_from_ptr(raw_args[idx])
-        let arg_len = len(arg_str)
-
-        if stop_options == true
-            positionals.push(arg_str)
-            idx += 1
-        elif arg_str == "--"
-            stop_options = true
-            idx += 1
-        else
-            when arg_str
-                is "-h", "--help" then
-                    help_req = true
-                    flags["help"] = true
-                    flags["h"] = true
-                    idx += 1
-                is "-V", "--version" then
-                    version_req = true
-                    flags["version"] = true
-                    flags["V"] = true
-                    idx += 1
+                let cluster_option: CliOption = lookup_options[cluster_index]
+                if cluster_option.kind != OptionKind.Flag
+                    scope.errors.push(make_error(ErrorCode.MissingValue, letter, "Missing value for option: -" + letter))
+                    position = token_length
                 else
-                    let token_kind = _cli_classify_token(arg_str)
-                    when token_kind
-                        is ArgKind.InvertedFlag
-                            # Inverted flag: --no-cache => cache=0, no-cache=1
-                            let positive_name = arg_str[5..arg_len]
-                            flags[positive_name] = false
-                            flags[f"no-{positive_name}"] = true
-                            idx += 1
-                        is ArgKind.LongOption
-                            # Long option or flag
-                            let eq_pos = _cli_find_char(arg_str, "=")
-                            if eq_pos != -1
-                                let raw_k = arg_str[2..eq_pos]
-                                let val = arg_str[(eq_pos + 1)..arg_len]
-                                let opt_match = _cli_lookup_opt(app, active_cmd, raw_k)
-                                if opt_match is not null and opt_match != 0
-                                    let s_name = str_from_ptr(opt_match.opt_short)
-                                    if opt_match.opt_is_multi == true
-                                        if raw_k not in array_options
-                                            array_options[raw_k] = []
-                                        end
-                                        let arr_ref = array_options[raw_k]
-                                        arr_ref.push(val)
-                                        if len(s_name) > 0
-                                            if s_name not in array_options
-                                                array_options[s_name] = []
-                                            end
-                                            let arr_ref_s = array_options[s_name]
-                                            arr_ref_s.push(val)
-                                        end
-                                    else
-                                        options[raw_k] = val
-                                        if len(s_name) > 0
-                                            options[s_name] = val
-                                        end
-                                    end
-                                else
-                                    options[raw_k] = val
-                                end
-                            else
-                                let raw_k = arg_str[2..arg_len]
-                                let opt_match = _cli_lookup_opt(app, active_cmd, raw_k)
-                                if opt_match is not null and opt_match != 0
-                                    let s_name = str_from_ptr(opt_match.opt_short)
-                                    if opt_match.opt_is_flag == true
-                                        flags[raw_k] = true
-                                        if len(s_name) > 0
-                                            flags[s_name] = true
-                                        end
-                                    else
-                                        if idx + 1 < num_raw
-                                            idx += 1
-                                            let val = str_from_ptr(raw_args[idx])
-                                            if opt_match.opt_is_multi == true
-                                                if raw_k not in array_options
-                                                    array_options[raw_k] = []
-                                                end
-                                                let arr_ref = array_options[raw_k]
-                                                arr_ref.push(val)
-                                                if len(s_name) > 0
-                                                    if s_name not in array_options
-                                                        array_options[s_name] = []
-                                                    end
-                                                    let arr_ref_s = array_options[s_name]
-                                                    arr_ref_s.push(val)
-                                                end
-                                            else
-                                                options[raw_k] = val
-                                                if len(s_name) > 0
-                                                    options[s_name] = val
-                                                end
-                                            end
-                                        else
-                                            errors.push(f"Missing value for option: --{raw_k}")
-                                        end
-                                    end
-                                else
-                                    flags[raw_k] = true
-                                end
-                            end
-                            idx += 1
-                        is ArgKind.ShortOption
-                            # Short flag(s) or option
-                            if arg_len == 2
-                                let s_char = arg_str[1..2]
-                                let opt_match = _cli_lookup_opt(app, active_cmd, s_char)
-                                if opt_match is not null and opt_match != 0
-                                    let l_name = str_from_ptr(opt_match.opt_long)
-                                    if opt_match.opt_is_flag == true
-                                        flags[s_char] = true
-                                        if len(l_name) > 0
-                                            flags[l_name] = true
-                                        end
-                                    else
-                                        if idx + 1 < num_raw
-                                            idx += 1
-                                            let val = str_from_ptr(raw_args[idx])
-                                            if opt_match.opt_is_multi == true
-                                                if s_char not in array_options
-                                                    array_options[s_char] = []
-                                                end
-                                                let arr_ref = array_options[s_char]
-                                                arr_ref.push(val)
-                                                if len(l_name) > 0
-                                                    if l_name not in array_options
-                                                        array_options[l_name] = []
-                                                    end
-                                                    let arr_ref_l = array_options[l_name]
-                                                    arr_ref_l.push(val)
-                                                end
-                                            else
-                                                options[s_char] = val
-                                                if len(l_name) > 0
-                                                    options[l_name] = val
-                                                end
-                                            end
-                                        else
-                                            errors.push(f"Missing value for option: -{s_char}")
-                                        end
-                                    end
-                                else
-                                    flags[s_char] = true
-                                end
-                            else
-                                # Length > 2: e.g. clustered flags -abc or attached option -oValue
-                                let first_char = arg_str[1..2]
-                                let first_match = _cli_lookup_opt(app, active_cmd, first_char)
-                                let is_attached = false
-                                if first_match is not null and first_match != 0
-                                    if first_match.opt_is_flag == false
-                                        is_attached = true
-                                    end
-                                end
-
-                                if is_attached == true
-                                    # Attached value: -oValue
-                                    let val = arg_str[2..arg_len]
-                                    let l_name = str_from_ptr(first_match.opt_long)
-                                    if first_match.opt_is_multi == true
-                                        if first_char not in array_options
-                                            array_options[first_char] = []
-                                        end
-                                        let arr_ref = array_options[first_char]
-                                        arr_ref.push(val)
-                                        if len(l_name) > 0
-                                            if l_name not in array_options
-                                                array_options[l_name] = []
-                                            end
-                                            let arr_ref_l = array_options[l_name]
-                                            arr_ref_l.push(val)
-                                        end
-                                    else
-                                        options[first_char] = val
-                                        if len(l_name) > 0
-                                            options[l_name] = val
-                                        end
-                                    end
-                                else
-                                    # Clustered flags: -abc
-                                    let c_idx = 1
-                                    while c_idx < arg_len
-                                        let ch = arg_str[c_idx..(c_idx + 1)]
-                                        flags[ch] = true
-                                        let m = _cli_lookup_opt(app, active_cmd, ch)
-                                        if m is not null and m != 0
-                                            let lg = str_from_ptr(m.opt_long)
-                                            if len(lg) > 0
-                                                flags[lg] = true
-                                            end
-                                        end
-                                        c_idx += 1
-                                    end
-                                end
-                            end
-                            idx += 1
-                        else
-                            # Positional argument or subcommand
-                            let matched_sub = false
-                            if active_cmd is null or active_cmd == 0
-                                if len(app.app_commands) > 0
-                                    let cmd_match = _cli_lookup_cmd(app.app_commands, arg_str)
-                                    if cmd_match is not null and cmd_match != 0
-                                        active_cmd = cmd_match
-                                        command_name = str_from_ptr(cmd_match.cmd_name)
-                                        _cli_populate_defaults(cmd_match.cmd_options, flags, options, array_options)
-                                        matched_sub = true
-                                        idx += 1
-                                    end
-                                end
-                            else
-                                if len(active_cmd.cmd_subcommands) > 0
-                                    let sub_match = _cli_lookup_cmd(active_cmd.cmd_subcommands, arg_str)
-                                    if sub_match is not null and sub_match != 0
-                                        active_cmd = sub_match
-                                        let sub_name = str_from_ptr(sub_match.cmd_name)
-                                        command_name = f"{command_name} {sub_name}"
-                                        _cli_populate_defaults(sub_match.cmd_options, flags, options, array_options)
-                                        matched_sub = true
-                                        idx += 1
-                                    end
-                                end
-                            end
-
-                            if matched_sub == false
-                                positionals.push(arg_str)
-                                idx += 1
-                            end
-                    end
-            end
-        end
-    end
-
-    # 2. Check required options and validate choices
-    let opt_pool = app.app_options
-    if active_cmd is not null and active_cmd != 0
-        let pool = []
-        for opt_item in app.app_options
-            pool.push(opt_item)
-        end
-        for cmd_opt in active_cmd.cmd_options
-            pool.push(cmd_opt)
-        end
-        opt_pool = pool
-    end
-
-    for opt in opt_pool
-        let s = str_from_ptr(opt.opt_short)
-        let l = str_from_ptr(opt.opt_long)
-
-        # Required check
-        if opt.opt_required == true
-            let has_val = false
-            if len(l) > 0 and (l in options)
-                let v = str_from_ptr(options[l])
-                if len(v) > 0
-                    has_val = true
+                    parser_store_flag(cluster_option, letter, true, scope)
                 end
             end
-            if len(s) > 0 and (s in options)
-                let v = str_from_ptr(options[s])
-                if len(v) > 0
-                    has_val = true
-                end
-            end
-            if has_val == false
-                errors.push(f"Missing required option: --{l}")
-            end
+            position += 1
         end
-
-        # Choice validation
-        if len(opt.opt_choices) > 0
-            let chosen_val = ""
-            if len(l) > 0 and (l in options)
-                chosen_val = str_from_ptr(options[l])
-            end
-            if len(chosen_val) == 0 and len(s) > 0 and (s in options)
-                chosen_val = str_from_ptr(options[s])
-            end
-            if len(chosen_val) > 0
-                if chosen_val not in opt.opt_choices
-                    let allowed = _cli_join_array(opt.opt_choices, ", ")
-                    errors.push(f"Invalid value '{chosen_val}' for option --{l}. Allowed choices: [{allowed}]")
-                end
-            end
-        end
+        return index + 1
     end
 
-    # 3. Bind positional arguments
-    let arg_defs = app.app_arguments
-    if active_cmd is not null and active_cmd != 0
-        if len(active_cmd.cmd_arguments) > 0
-            arg_defs = active_cmd.cmd_arguments
-        end
-    end
-
-    let num_defs = len(arg_defs)
-    let num_pos = len(positionals)
-    let ai = 0
-    let pi = 0
-
-    while ai < num_defs
-        let adef = arg_defs[ai]
-        let aname = str_from_ptr(adef.arg_name)
-        if adef.arg_variadic == true
-            let remaining = []
-            while pi < num_pos
-                remaining.push(positionals[pi])
-                pi += 1
-            end
-            arg_map[aname] = remaining
-        else
-            if pi < num_pos
-                arg_map[aname] = positionals[pi]
-                pi += 1
-            else
-                if adef.arg_required == true
-                    errors.push(f"Missing required argument: <{aname}>")
-                elif len(adef.arg_default) > 0
-                    arg_map[aname] = str_from_ptr(adef.arg_default)
-                end
-            end
-        end
-        ai += 1
-    end
-
-    return CliContext { ctx_app: app, ctx_cmd_name: command_name, ctx_flags: flags, ctx_options: options, ctx_array_opts: array_options, ctx_args: positionals, ctx_arg_map: arg_map, ctx_errors: errors, ctx_help_req: help_req, ctx_version_req: version_req, ctx_raw_args: raw_args }
+    # Attached value such as `-oDist`.
+    parser_store_value(option, short_name, token[2..token_length], scope)
+    return index + 1
 end
 
-## Parses process arguments into a resolved execution context.
-pub function app_parse_args(app: CliApp) -> CliContext
-    return app_parse(app, args())
+# Reads an environment variable, returning an empty string when unavailable.
+@cfg(feature = "env")
+function parser_env_value(name: string) -> string
+    if has_env(name) == false
+        return ""
+    end
+    return env(name)
 end
 
-# --- Context Accessor Helpers ---
+@cfg(not(feature = "env"))
+function parser_env_value(name: string) -> string
+    return ""
+end
 
-## Returns a parsed flag value (1 or 0).
-pub function ctx_get_flag(ctx: CliContext, name) -> int
-    let clean = _cli_strip_dashes(name)
-    let fl = ctx.ctx_flags
-    if clean in fl
-        return fl[clean]
+# Reports whether an option name was already handled by an earlier entry.
+function parser_option_seen(seen: array, option: CliOption) -> bool
+    if len(option.long_name) > 0 and option.long_name in seen
+        return true
+    end
+    if len(option.short_name) > 0 and option.short_name in seen
+        return true
     end
     return false
 end
 
-## Returns a parsed option value or the default.
-pub function ctx_get_option(ctx: CliContext, name, default_val = "") -> string
-    let clean = _cli_strip_dashes(name)
-    let opts = ctx.ctx_options
-    if clean in opts
-        return str_from_ptr(opts[clean])
+# Records the names of an option so later duplicates can be skipped.
+function parser_mark_seen(seen: array, option: CliOption)
+    if len(option.long_name) > 0
+        seen.push(option.long_name)
     end
-    return default_val
+    if len(option.short_name) > 0
+        seen.push(option.short_name)
+    end
 end
 
-## Returns all collected values for a repeatable option.
-pub function ctx_get_all(ctx: CliContext, name) -> array
-    let clean = _cli_strip_dashes(name)
-    let aopts = ctx.ctx_array_opts
-    if clean in aopts
-        return aopts[clean]
+# Validates one option and collects the diagnostics it produces.
+function parser_validate_option(spec: CliOption, scope: ParseScope)
+    let short_name = spec.short_name
+    let long_name = spec.long_name
+    let display_name = long_name
+    if len(display_name) == 0
+        display_name = short_name
+    end
+
+    let current = ""
+    if long_name in scope.options
+        current = str(scope.options[long_name])
+    elif short_name in scope.options
+        current = str(scope.options[short_name])
+    end
+
+    # Environment fallback for omitted options. The lookup is driven by the
+    # `provided` map, not by the current value: an option with a non-empty
+    # default would otherwise never fall back to the environment.
+    let was_provided = false
+    if long_name in scope.provided or short_name in scope.provided
+        was_provided = true
+    end
+    if was_provided == false and len(spec.env_var) > 0
+        let fallback = parser_env_value(spec.env_var)
+        if len(fallback) > 0
+            current = fallback
+            for key in parser_option_names(spec, display_name)
+                scope.options[key] = fallback
+            end
+        end
+    end
+
+    if spec.required == true and len(current) == 0
+        scope.errors.push(make_error(ErrorCode.MissingRequired, display_name, "Missing required option: --" + display_name))
+    end
+
+    if len(spec.choices) > 0 and len(current) > 0
+        if current not in spec.choices
+            let allowed = internal_join(spec.choices, ", ")
+            scope.errors.push(make_error(ErrorCode.InvalidChoice, display_name, "Invalid value '" + current + "' for option --" + display_name + ". Allowed choices: [" + allowed + "]"))
+        end
+    end
+end
+
+# ───────────────────────────────────────────────────────────────
+# Parsing engine
+# ───────────────────────────────────────────────────────────────
+
+## Parses a raw argument array into a resolved execution context.
+##
+## Supports long options (`--output dist`, `--output=dist`), short options
+## (`-o dist`, `-oDist`), clustered short flags (`-abc`), negated flags
+## (`--no-color`), repeatable options (`-I a -I b`), the `--` terminator,
+## global options, nested subcommands with aliases, and positional
+## arguments (required, optional, and variadic).
+##
+## ### Parameters
+## - `app`: The application specification driving the parse.
+## - `raw_args`: The argument array to parse (usually `args()`).
+##
+## ### Returns
+## A `CliContext` with the resolved values and the collected diagnostics.
+##
+## ### Examples
+## ```alya
+## let ctx = parse(app, ["--verbose", "input.txt"])
+## ```
+pub function parse(app: CliApp, raw_args: array) -> CliContext
+    let scope = ParseScope {
+        flags: {},
+        options: {},
+        multi_options: {},
+        provided: {},
+        errors: []
+    }
+
+    let global_options = app.options
+    let scope_options = app.options
+    let lookup_options = app.options
+    let scope_arguments = app.arguments
+    let scope_commands = app.commands
+    let scope_depth = 0
+
+    let command_name = ""
+    let command_path = ""
+    let help_requested = false
+    let version_requested = false
+    let orphan_token = ""
+
+    let positional = []
+    let named = {}
+
+    parser_seed_defaults(global_options, scope)
+
+    let count = len(raw_args)
+    let index = 0
+    let stop_options = false
+
+    while index < count
+        let token = str(raw_args[index])
+
+        if stop_options == true
+            positional.push(token)
+            index += 1
+        elif token == "--"
+            stop_options = true
+            index += 1
+        elif token == "-h" or token == "--help"
+            help_requested = true
+            scope.flags["help"] = true
+            scope.flags["h"] = true
+            index += 1
+        elif token == "-V" or token == "--version"
+            version_requested = true
+            scope.flags["version"] = true
+            scope.flags["V"] = true
+            index += 1
+        else
+            let kind = parser_classify(token)
+            if kind == TokenKind.Inverted
+                parser_apply_inverted(lookup_options, token, scope)
+                index += 1
+            elif kind == TokenKind.Long
+                index = parser_apply_long(lookup_options, token, index, raw_args, scope)
+            elif kind == TokenKind.Short
+                index = parser_apply_short(lookup_options, token, index, raw_args, scope)
+            else
+                let command_index = internal_find_command(scope_commands, token)
+                if command_index >= 0
+                    let command: CliCommand = scope_commands[command_index]
+                    scope_options = command.options
+                    lookup_options = parser_merge_options(command.options, global_options)
+                    scope_arguments = command.arguments
+                    scope_commands = command.subcommands
+                    scope_depth += 1
+                    command_name = command.name
+                    if scope_depth == 1
+                        command_path = command.name
+                    else
+                        command_path += " " + command.name
+                    end
+                    parser_seed_defaults(scope_options, scope)
+                    index += 1
+                else
+                    if scope_depth == 0 and len(app.commands) > 0 and len(app.arguments) == 0
+                        if len(orphan_token) == 0
+                            orphan_token = token
+                        end
+                    end
+                    positional.push(token)
+                    index += 1
+                end
+            end
+        end
+    end
+
+    # ── Validation of the effective option set ──
+    # A command re-declaring a global option shadows it, so the first
+    # definition of a name wins and is validated only once.
+    let seen = []
+    for option in lookup_options
+        let spec: CliOption = option
+        if parser_option_seen(seen, spec) == false
+            parser_validate_option(spec, scope)
+        end
+        parser_mark_seen(seen, spec)
+    end
+
+    # ── Unknown command detection ──
+    if len(orphan_token) > 0 and help_requested == false and version_requested == false
+        scope.errors.push(make_error(ErrorCode.UnknownCommand, orphan_token, "Unknown command: " + orphan_token))
+    end
+
+    # ── Positional binding ──
+    let definitions = scope_arguments
+    if scope_depth > 0 and len(scope_arguments) == 0
+        definitions = app.arguments
+    end
+
+    let definition_count = len(definitions)
+    let positional_count = len(positional)
+    let definition_index = 0
+    let value_index = 0
+
+    while definition_index < definition_count
+        let definition: CliArgument = definitions[definition_index]
+        let argument_name = definition.name
+        if definition.variadic == true
+            let remaining = []
+            while value_index < positional_count
+                remaining.push(positional[value_index])
+                value_index += 1
+            end
+            named[argument_name] = remaining
+        else
+            if value_index < positional_count
+                named[argument_name] = positional[value_index]
+                value_index += 1
+            else
+                if definition.required == true
+                    scope.errors.push(make_error(ErrorCode.MissingArgument, argument_name, "Missing required argument: <" + argument_name + ">"))
+                elif len(definition.default_value) > 0
+                    named[argument_name] = definition.default_value
+                end
+            end
+        end
+        definition_index += 1
+    end
+
+    return CliContext {
+        app: app,
+        command_name: command_name,
+        command_path: command_path,
+        flags: scope.flags,
+        options: scope.options,
+        multi_options: scope.multi_options,
+        provided: scope.provided,
+        positional: positional,
+        named: named,
+        errors: scope.errors,
+        help_requested: help_requested,
+        version_requested: version_requested,
+        raw_args: raw_args
+    }
+end
+
+## Parses the process arguments into a resolved execution context.
+##
+## ### Parameters
+## - `app`: The application specification driving the parse.
+##
+## ### Returns
+## A `CliContext` with the resolved values and the collected diagnostics.
+##
+## ### Examples
+## ```alya
+## let ctx = parse_args(app)
+## ```
+pub function parse_args(app: CliApp) -> CliContext
+    return parse(app, args())
+end
+
+# ───────────────────────────────────────────────────────────────
+# Context accessors
+# ───────────────────────────────────────────────────────────────
+
+## Returns the state of a parsed flag.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Flag name, with or without leading dashes.
+##
+## ### Returns
+## `true` when the flag was enabled, `false` otherwise.
+pub function ctx_get_flag(ctx: CliContext, name: string) -> bool
+    let clean = internal_strip_dashes(name)
+    let flags = ctx.flags
+    if clean in flags
+        return flags[clean] == true
+    end
+    return false
+end
+
+## Returns the value of a parsed option.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+## - `default_value`: Value returned when the option is absent. Defaults to `""`.
+##
+## ### Returns
+## The resolved option value, or `default_value`.
+pub function ctx_get_option(ctx: CliContext, name: string, default_value: string = "") -> string
+    let clean = internal_strip_dashes(name)
+    let options = ctx.options
+    if clean in options
+        return str(options[clean])
+    end
+    return default_value
+end
+
+## Returns the value of a parsed option converted to an integer.
+##
+## Non-numeric values fall back to `default_value`.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+## - `default_value`: Value returned when the option is absent or not numeric. Defaults to `0`.
+##
+## ### Returns
+## The integer value of the option, or `default_value`.
+pub function ctx_get_int(ctx: CliContext, name: string, default_value: int = 0) -> int
+    return internal_to_int(ctx_get_option(ctx, name, ""), default_value)
+end
+
+## Returns the boolean value of a parsed option.
+##
+## Accepts `1`, `true`, `yes`, and `on` as true; falls back to the flag state.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+##
+## ### Returns
+## `true` when the value reads as true, `false` otherwise.
+pub function ctx_get_bool(ctx: CliContext, name: string) -> bool
+    let clean = internal_strip_dashes(name)
+    let options = ctx.options
+    if clean in options
+        return internal_is_truthy(str(options[clean]))
+    end
+    return ctx_get_flag(ctx, name)
+end
+
+## Returns every value collected for a repeatable option.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+##
+## ### Returns
+## The collected values, or an empty array when the option is absent.
+pub function ctx_get_all(ctx: CliContext, name: string) -> array
+    let clean = internal_strip_dashes(name)
+    let multi_options = ctx.multi_options
+    if clean in multi_options
+        return multi_options[clean]
     end
     return []
 end
 
-## Returns a positional argument by index or the default.
-pub function ctx_get_arg(ctx: CliContext, idx: int, default_val = "") -> string
-    let r_args = ctx.ctx_args
-    if idx >= 0 and idx < len(r_args)
-        return str_from_ptr(r_args[idx])
+## Returns a positional value by position.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `index`: Zero-based position of the value.
+## - `default_value`: Value returned when the position is out of range. Defaults to `""`.
+##
+## ### Returns
+## The positional value, or `default_value`.
+pub function ctx_get_arg(ctx: CliContext, index: int, default_value: string = "") -> string
+    let values = ctx.positional
+    if index >= 0 and index < len(values)
+        return str(values[index])
     end
-    return default_val
+    return default_value
 end
 
-## Returns a named positional argument or the default.
-pub function ctx_get_arg_named(ctx: CliContext, name, default_val = "") -> string
-    let amap = ctx.ctx_arg_map
-    let n = str_from_ptr(name)
-    if n in amap
-        return str_from_ptr(amap[n])
+## Returns a positional value by argument name.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Argument name as declared in the specification.
+## - `default_value`: Value returned when the argument is absent. Defaults to `""`.
+##
+## ### Returns
+## The bound value, or `default_value`.
+pub function ctx_get_arg_named(ctx: CliContext, name: string, default_value: string = "") -> string
+    let named = ctx.named
+    if name in named
+        return str(named[name])
     end
-    return default_val
+    return default_value
 end
 
-## Returns all positional argument strings.
+## Returns every positional value in order.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The positional values.
 pub function ctx_get_args(ctx: CliContext) -> array
-    return ctx.ctx_args
+    return ctx.positional
 end
 
-## Returns the active command name.
+## Returns the name of the matched command.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The command name, or an empty string when no command was matched.
 pub function ctx_get_command(ctx: CliContext) -> string
-    return str_from_ptr(ctx.ctx_cmd_name)
+    return ctx.command_name
 end
 
-## Returns 1 when the named command is active.
-pub function ctx_has_command(ctx: CliContext, name) -> bool
-    let n = str_from_ptr(name)
-    let c = str_from_ptr(ctx.ctx_cmd_name)
-    return c == n
+## Returns the full path of the matched command.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The space separated command path, e.g. `"remote add"`.
+pub function ctx_get_command_path(ctx: CliContext) -> string
+    return ctx.command_path
 end
 
-## Returns 1 when parsing collected errors.
-pub function ctx_has_errors(ctx: CliContext) -> bool
-    return len(ctx.ctx_errors) > 0
+## Reports whether the given command was matched.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Command name or alias to look for.
+##
+## ### Returns
+## `true` when the command is active, `false` otherwise.
+pub function ctx_has_command(ctx: CliContext, name: string) -> bool
+    return ctx.command_name == name
 end
 
-## Returns parsing and validation error messages.
-pub function ctx_get_errors(ctx: CliContext) -> array
-    return ctx.ctx_errors
-end
-
-## Returns 1 when help was requested.
-pub function ctx_help_requested(ctx: CliContext) -> int
-    return ctx.ctx_help_req
-end
-
-## Returns 1 when version output was requested.
-pub function ctx_version_requested(ctx: CliContext) -> int
-    return ctx.ctx_version_req
-end
-
-# --- Struct Methods (Alya v0.0.18) ---
-
-# CliApp methods
-## Sets the author string on this app.
-pub function CliApp.set_author(self: CliApp, author: string) -> CliApp
-    return app_set_author(self, author)
-end
-
-## Sets the version string on this app.
-pub function CliApp.set_version(self: CliApp, version: string) -> CliApp
-    return app_set_version(self, version)
-end
-
-## Adds a boolean flag to this app.
-pub function CliApp.add_flag(self: CliApp, flags_spec, description: string = "") -> CliApp
-    return app_add_flag(self, flags_spec, description)
-end
-
-## Alias for add_flag on this app.
-pub function CliApp.flag(self: CliApp, flags_spec, description: string = "") -> CliApp
-    return app_add_flag(self, flags_spec, description)
-end
-
-## Adds a single-value option to this app.
-pub function CliApp.add_option(self: CliApp, flags_spec, default_val: string = "", description: string = "") -> CliApp
-    return app_add_option(self, flags_spec, default_val, description)
-end
-
-## Alias for add_option on this app.
-pub function CliApp.option(self: CliApp, flags_spec, default_val: string = "", description: string = "") -> CliApp
-    return app_add_option(self, flags_spec, default_val, description)
-end
-
-## Adds a repeatable option to this app.
-pub function CliApp.add_multi_option(self: CliApp, flags_spec, description: string = "") -> CliApp
-    return app_add_multi_option(self, flags_spec, description)
-end
-
-## Adds a constrained-choice option to this app.
-pub function CliApp.add_choice_option(self: CliApp, flags_spec, default_val: string, choices: array, description: string = "") -> CliApp
-    return app_add_choice_option(self, flags_spec, default_val, choices, description)
-end
-
-## Adds a mandatory option to this app.
-pub function CliApp.add_required_option(self: CliApp, flags_spec, description: string = "") -> CliApp
-    return app_add_required_option(self, flags_spec, description)
-end
-
-## Adds a positional argument to this app.
-pub function CliApp.add_argument(self: CliApp, name: string, description: string = "", required: int = false, default_val: string = "") -> CliApp
-    return app_add_argument(self, name, description, required, default_val)
-end
-
-## Alias for add_argument on this app.
-pub function CliApp.argument(self: CliApp, name: string, description: string = "", required: int = false, default_val: string = "") -> CliApp
-    return app_add_argument(self, name, description, required, default_val)
-end
-
-## Adds a variadic argument to this app.
-pub function CliApp.add_variadic_argument(self: CliApp, name: string, description: string = "") -> CliApp
-    return app_add_variadic_argument(self, name, description)
-end
-
-## Adds a subcommand to this app.
-pub function CliApp.add_command(self: CliApp, cmd: CliCommand) -> CliApp
-    return app_add_command(self, cmd)
-end
-
-## Alias for add_command on this app.
-pub function CliApp.command(self: CliApp, cmd: CliCommand) -> CliApp
-    return app_add_command(self, cmd)
-end
-
-## Parses argument strings with this app.
-pub function CliApp.parse(self: CliApp, raw_args: array) -> CliContext
-    return app_parse(self, raw_args)
-end
-
-## Parses given or process arguments with this app.
-pub function CliApp.run(self: CliApp, raw_args = null) -> CliContext
-    if raw_args is null
-        return app_parse_args(self)
+## Reports whether the given flag, option, or repeatable option was provided.
+##
+## Only values that appeared on the command line count: an option left at
+## its declared default is reported as absent.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Flag or option name, with or without leading dashes.
+##
+## ### Returns
+## `true` when the value was provided, `false` otherwise.
+pub function ctx_has(ctx: CliContext, name: string) -> bool
+    let clean = internal_strip_dashes(name)
+    let provided = ctx.provided
+    if clean in provided
+        return true
     end
-    return app_parse(self, raw_args)
+    return false
 end
 
-# CliCommand methods
-## Adds a boolean flag to this command.
-pub function CliCommand.add_flag(self: CliCommand, flags_spec, description: string = "") -> CliCommand
-    return cmd_add_flag(self, flags_spec, description)
+## Reports whether the parse collected diagnostics.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## `true` when at least one diagnostic was collected, `false` otherwise.
+pub function ctx_has_errors(ctx: CliContext) -> bool
+    return len(ctx.errors) > 0
 end
 
-## Alias for add_flag on this command.
-pub function CliCommand.flag(self: CliCommand, flags_spec, description: string = "") -> CliCommand
-    return cmd_add_flag(self, flags_spec, description)
+## Returns the collected diagnostics.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The `CliError` instances in the order they were produced.
+pub function ctx_get_errors(ctx: CliContext) -> array
+    return ctx.errors
 end
 
-## Adds a single-value option to this command.
-pub function CliCommand.add_option(self: CliCommand, flags_spec, default_val: string = "", description: string = "") -> CliCommand
-    return cmd_add_option(self, flags_spec, default_val, description)
+## Reports whether help was requested.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## `true` when `-h` or `--help` was supplied.
+pub function ctx_help_requested(ctx: CliContext) -> bool
+    return ctx.help_requested == true
 end
 
-## Alias for add_option on this command.
-pub function CliCommand.option(self: CliCommand, flags_spec, default_val: string = "", description: string = "") -> CliCommand
-    return cmd_add_option(self, flags_spec, default_val, description)
-end
-
-## Adds a repeatable option to this command.
-pub function CliCommand.add_multi_option(self: CliCommand, flags_spec, description: string = "") -> CliCommand
-    return cmd_add_multi_option(self, flags_spec, description)
-end
-
-## Adds a constrained-choice option to this command.
-pub function CliCommand.add_choice_option(self: CliCommand, flags_spec, default_val: string, choices: array, description: string = "") -> CliCommand
-    return cmd_add_choice_option(self, flags_spec, default_val, choices, description)
-end
-
-## Adds a mandatory option to this command.
-pub function CliCommand.add_required_option(self: CliCommand, flags_spec, description: string = "") -> CliCommand
-    return cmd_add_required_option(self, flags_spec, description)
-end
-
-## Adds a positional argument to this command.
-pub function CliCommand.add_argument(self: CliCommand, name: string, description: string = "", required: int = false, default_val: string = "") -> CliCommand
-    return cmd_add_argument(self, name, description, required, default_val)
-end
-
-## Alias for add_argument on this command.
-pub function CliCommand.argument(self: CliCommand, name: string, description: string = "", required: int = false, default_val: string = "") -> CliCommand
-    return cmd_add_argument(self, name, description, required, default_val)
-end
-
-## Adds a variadic argument to this command.
-pub function CliCommand.add_variadic_argument(self: CliCommand, name: string, description: string = "") -> CliCommand
-    return cmd_add_variadic_argument(self, name, description)
-end
-
-## Nests a subcommand under this command.
-pub function CliCommand.add_subcommand(self: CliCommand, sub_cmd: CliCommand) -> CliCommand
-    return cmd_add_subcommand(self, sub_cmd)
-end
-
-## Alias for add_subcommand on this command.
-pub function CliCommand.subcommand(self: CliCommand, sub_cmd: CliCommand) -> CliCommand
-    return cmd_add_subcommand(self, sub_cmd)
-end
-
-# CliContext methods
-## Returns a parsed flag value from this context.
-pub function CliContext.get_flag(self: CliContext, name) -> int
-    return ctx_get_flag(self, name)
-end
-
-## Alias for get_flag on this context.
-pub function CliContext.flag(self: CliContext, name) -> int
-    return ctx_get_flag(self, name)
-end
-
-## Returns a parsed option value from this context.
-pub function CliContext.get_option(self: CliContext, name, default_val = "") -> string
-    return ctx_get_option(self, name, default_val)
-end
-
-## Alias for get_option on this context.
-pub function CliContext.option(self: CliContext, name, default_val = "") -> string
-    return ctx_get_option(self, name, default_val)
-end
-
-## Returns all values for a repeatable option.
-pub function CliContext.get_all(self: CliContext, name) -> array
-    return ctx_get_all(self, name)
-end
-
-## Alias for get_all on this context.
-pub function CliContext.all(self: CliContext, name) -> array
-    return ctx_get_all(self, name)
-end
-
-## Returns a positional argument from this context.
-pub function CliContext.get_arg(self: CliContext, idx: int, default_val = "") -> string
-    return ctx_get_arg(self, idx, default_val)
-end
-
-## Alias for get_arg on this context.
-pub function CliContext.arg(self: CliContext, idx: int, default_val = "") -> string
-    return ctx_get_arg(self, idx, default_val)
-end
-
-## Returns a named positional from this context.
-pub function CliContext.get_arg_named(self: CliContext, name, default_val = "") -> string
-    return ctx_get_arg_named(self, name, default_val)
-end
-
-## Returns all positional arguments.
-pub function CliContext.get_args(self: CliContext) -> array
-    return ctx_get_args(self)
-end
-
-## Alias for get_args on this context.
-pub function CliContext.args(self: CliContext) -> array
-    return ctx_get_args(self)
-end
-
-## Returns the active command name.
-pub function CliContext.get_command(self: CliContext) -> string
-    return ctx_get_command(self)
-end
-
-## Alias for get_command on this context.
-pub function CliContext.command(self: CliContext) -> string
-    return ctx_get_command(self)
-end
-
-## Returns 1 when the named command is active.
-pub function CliContext.has_command(self: CliContext, name) -> int
-    return ctx_has_command(self, name)
-end
-
-## Returns 1 when this context has errors.
-pub function CliContext.has_errors(self: CliContext) -> int
-    return ctx_has_errors(self)
-end
-
-## Returns error messages from this context.
-pub function CliContext.get_errors(self: CliContext) -> array
-    return ctx_get_errors(self)
-end
-
-## Alias for get_errors on this context.
-pub function CliContext.errors(self: CliContext) -> array
-    return ctx_get_errors(self)
-end
-
-## Returns 1 when help was requested.
-pub function CliContext.help_requested(self: CliContext) -> int
-    return ctx_help_requested(self)
-end
-
-## Returns 1 when version output was requested.
-pub function CliContext.version_requested(self: CliContext) -> int
-    return ctx_version_requested(self)
+## Reports whether the version banner was requested.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## `true` when `-V` or `--version` was supplied.
+pub function ctx_version_requested(ctx: CliContext) -> bool
+    return ctx.version_requested == true
 end

@@ -1,131 +1,1089 @@
-## CLI Library Facade
+## cli Library Facade
 ##
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang).
-## Modern command-line interface, argument parsing, flag handling, and subcommand router for Alya.
+## Public entry point of the `cli` package: application and command
+## builders, the parsing entry points, the parsed-context accessors, the
+## usage screen renderer, and the structured error helpers.
+##
+## The facade is a thin layer over the engines in `src/core/`:
+## `spec.alya` builds the specifications, `parser.alya` resolves the
+## arguments, `formatter.alya` renders the usage screens, and
+## `errors.alya` adds the throwing and recovering parse variants.
 
 import "./types.alya"
-import "./core/parser.alya"
+import "./core/spec.alya" as spec
+import "./core/parser.alya" as parser
 @cfg(feature = "help")
-import "./core/formatter.alya"
+import "./core/formatter.alya" as formatter
+@cfg(feature = "strict")
+import "./core/errors.alya" as errors
 
-## Constructs and initializes a new top-level CLI application.
+# ───────────────────────────────────────────────────────────────
+# Constructors
+# ───────────────────────────────────────────────────────────────
+
+## Creates an application specification.
 ##
 ## ### Parameters
-## - `name`: The executable application name (e.g. `"mytool"`).
-## - `description`: Brief description displayed in help screens. Defaults to `""`.
-## - `version`: Semantic version string. Defaults to `"1.0.0"`.
+## - `name`: Executable name shown in usage screens.
+## - `description`: One-line summary shown in usage screens. Defaults to `""`.
+## - `version`: Version string shown by the version banner. Defaults to `"1.0.0"`.
 ##
 ## ### Returns
-## A newly initialized `CliApp` instance ready for configuration and execution.
+## A newly initialized `CliApp` instance.
 ##
 ## ### Examples
 ## ```alya
-## import "cli"
-##
-## let app = cli::new("mytool", "A high-performance build tool", "1.2.0")
+## let app = new_app("mytool", "A build tool", "1.2.0")
 ## ```
-pub function new(name: string, description: string = "", version: string = "1.0.0") -> CliApp
-    return app_new(name, description, version)
+pub function new_app(name: string, description: string = "", version: string = "1.0.0") -> CliApp
+    return spec::app_new(name, description, version)
 end
 
-## Constructs a new subcommand model instance.
+## Creates a command specification.
 ##
 ## ### Parameters
-## - `name`: The primary name of the subcommand (e.g. `"build"`).
-## - `description`: Description of what this subcommand does. Defaults to `""`.
-## - `aliases`: Shorthand alias strings (e.g. `["b"]`). Defaults to `[]`.
+## - `name`: Primary command name.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+## - `aliases`: Alternative names accepted for this command. Defaults to `[]`.
 ##
 ## ### Returns
 ## A newly initialized `CliCommand` instance.
 ##
 ## ### Examples
 ## ```alya
-## import "cli"
-##
-## let build_cmd = cli::command("build", "Compile target package", ["b"])
+## let build = new_command("build", "Compile artifacts", ["b"])
 ## ```
-pub function command(name: string, description: string = "", aliases = []) -> CliCommand
-    return cmd_new(name, description, aliases)
+pub function new_command(name: string, description: string = "", aliases: array = []) -> CliCommand
+    return spec::cmd_new(name, description, aliases)
 end
 
-## Parses an explicit array of command-line argument strings against the application specification.
-##
-## Populates flags, options, positional arguments, subcommands, and collects validation errors.
+# ───────────────────────────────────────────────────────────────
+# Application builders
+# ───────────────────────────────────────────────────────────────
+
+## Registers a boolean flag on an application.
 ##
 ## ### Parameters
-## - `app`: The target `CliApp` configuration model.
-## - `raw_args`: Array of argument strings (typically `sys::args()` or manual array).
+## - `app`: The application specification.
+## - `spec`: Flag names, e.g. `"-v, --verbose"`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
 ##
 ## ### Returns
-## A `CliContext` containing resolved values, flags, and error status.
+## The updated application.
+pub function add_flag(app: CliApp, spec: string, description: string = "") -> CliApp
+    return spec::app_add_flag(app, spec, description)
+end
+
+## Registers a single-value option on an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `spec`: Option names, e.g. `"-o, --output"`.
+## - `default_value`: Value applied when the option is omitted. Defaults to `""`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated application.
+pub function add_option(app: CliApp, spec: string, default_value: string = "", description: string = "") -> CliApp
+    return spec::app_add_option(app, spec, default_value, description)
+end
+
+## Registers a repeatable option on an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `spec`: Option names, e.g. `"-I, --include"`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated application.
+pub function add_multi_option(app: CliApp, spec: string, description: string = "") -> CliApp
+    return spec::app_add_multi_option(app, spec, description)
+end
+
+## Registers a choice-restricted option on an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `spec`: Option names, e.g. `"--format"`.
+## - `default_value`: Value applied when the option is omitted.
+## - `choices`: The allowed values.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated application.
+pub function add_choice_option(app: CliApp, spec: string, default_value: string, choices: array, description: string = "") -> CliApp
+    return spec::app_add_choice_option(app, spec, default_value, choices, description)
+end
+
+## Registers a mandatory option on an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `spec`: Option names, e.g. `"-c, --config"`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated application.
+pub function add_required_option(app: CliApp, spec: string, description: string = "") -> CliApp
+    return spec::app_add_required_option(app, spec, description)
+end
+
+## Registers an option that falls back to an environment variable.
+##
+## Requires the `env` feature (default-on). The environment variable is
+## consulted only when the option is omitted on the command line.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `spec`: Option names, e.g. `"-t, --token"`.
+## - `env_var`: Environment variable name, e.g. `"MYTOOL_TOKEN"`.
+## - `default_value`: Value applied when neither the option nor the environment provides a value. Defaults to `""`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated application.
+pub function add_env_option(app: CliApp, spec: string, env_var: string, default_value: string = "", description: string = "") -> CliApp
+    return spec::app_add_env_option(app, spec, env_var, default_value, description)
+end
+
+## Registers a positional argument on an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `name`: Argument name shown in usage screens.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+## - `required`: `true` when the argument must be provided. Defaults to `false`.
+## - `default_value`: Value applied when the argument is omitted. Defaults to `""`.
+##
+## ### Returns
+## The updated application.
+pub function add_argument(app: CliApp, name: string, description: string = "", required: bool = false, default_value: string = "") -> CliApp
+    return spec::app_add_argument(app, name, description, required, default_value)
+end
+
+## Registers a variadic positional argument on an application.
+##
+## The variadic argument captures every remaining positional value.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `name`: Argument name shown in usage screens.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated application.
+pub function add_variadic_argument(app: CliApp, name: string, description: string = "") -> CliApp
+    return spec::app_add_variadic_argument(app, name, description)
+end
+
+## Registers a command on an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `command`: The command specification to register.
+##
+## ### Returns
+## The updated application.
+pub function add_command(app: CliApp, command: CliCommand) -> CliApp
+    return spec::app_add_command(app, command)
+end
+
+## Sets the author string of an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `author`: The author string.
+##
+## ### Returns
+## The updated application.
+pub function set_author(app: CliApp, author: string) -> CliApp
+    return spec::app_set_author(app, author)
+end
+
+## Sets the version string of an application.
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `version`: The version string.
+##
+## ### Returns
+## The updated application.
+pub function set_version(app: CliApp, version: string) -> CliApp
+    return spec::app_set_version(app, version)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Command builders
+# ───────────────────────────────────────────────────────────────
+
+## Registers a boolean flag on a command.
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `spec`: Flag names, e.g. `"-r, --release"`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_flag(cmd: CliCommand, spec: string, description: string = "") -> CliCommand
+    return spec::cmd_add_flag(cmd, spec, description)
+end
+
+## Registers a single-value option on a command.
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `spec`: Option names, e.g. `"-t, --target"`.
+## - `default_value`: Value applied when the option is omitted. Defaults to `""`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_option(cmd: CliCommand, spec: string, default_value: string = "", description: string = "") -> CliCommand
+    return spec::cmd_add_option(cmd, spec, default_value, description)
+end
+
+## Registers a repeatable option on a command.
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `spec`: Option names, e.g. `"-I, --include"`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_multi_option(cmd: CliCommand, spec: string, description: string = "") -> CliCommand
+    return spec::cmd_add_multi_option(cmd, spec, description)
+end
+
+## Registers a choice-restricted option on a command.
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `spec`: Option names, e.g. `"-t, --target"`.
+## - `default_value`: Value applied when the option is omitted.
+## - `choices`: The allowed values.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_choice_option(cmd: CliCommand, spec: string, default_value: string, choices: array, description: string = "") -> CliCommand
+    return spec::cmd_add_choice_option(cmd, spec, default_value, choices, description)
+end
+
+## Registers a mandatory option on a command.
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `spec`: Option names, e.g. `"-c, --config"`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_required_option(cmd: CliCommand, spec: string, description: string = "") -> CliCommand
+    return spec::cmd_add_required_option(cmd, spec, description)
+end
+
+## Registers an option that falls back to an environment variable.
+##
+## Requires the `env` feature (default-on).
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `spec`: Option names, e.g. `"-t, --token"`.
+## - `env_var`: Environment variable name.
+## - `default_value`: Value applied when neither the option nor the environment provides a value. Defaults to `""`.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_env_option(cmd: CliCommand, spec: string, env_var: string, default_value: string = "", description: string = "") -> CliCommand
+    return spec::cmd_add_env_option(cmd, spec, env_var, default_value, description)
+end
+
+## Registers a positional argument on a command.
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `name`: Argument name shown in usage screens.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+## - `required`: `true` when the argument must be provided. Defaults to `false`.
+## - `default_value`: Value applied when the argument is omitted. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_argument(cmd: CliCommand, name: string, description: string = "", required: bool = false, default_value: string = "") -> CliCommand
+    return spec::cmd_add_argument(cmd, name, description, required, default_value)
+end
+
+## Registers a variadic positional argument on a command.
+##
+## ### Parameters
+## - `cmd`: The command specification.
+## - `name`: Argument name shown in usage screens.
+## - `description`: Help text shown in usage screens. Defaults to `""`.
+##
+## ### Returns
+## The updated command.
+pub function command_add_variadic_argument(cmd: CliCommand, name: string, description: string = "") -> CliCommand
+    return spec::cmd_add_variadic_argument(cmd, name, description)
+end
+
+## Nests a command under another command.
+##
+## ### Parameters
+## - `parent`: The parent command.
+## - `child`: The command to nest.
+##
+## ### Returns
+## The updated parent command.
+pub function command_add_subcommand(parent: CliCommand, child: CliCommand) -> CliCommand
+    return spec::cmd_add_subcommand(parent, child)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Parsing entry points
+# ───────────────────────────────────────────────────────────────
+
+## Parses an argument array into a resolved execution context.
+##
+## ### Parameters
+## - `app`: The application specification driving the parse.
+## - `raw_args`: The argument array to parse.
+##
+## ### Returns
+## A `CliContext` with the resolved values and the collected diagnostics.
 ##
 ## ### Examples
 ## ```alya
-## let ctx = cli::parse(app, ["--verbose", "input.txt"])
-## if ctx.get_flag("verbose") == 1
-##     say "Verbose output enabled"
+## let ctx = parse(app, ["--verbose", "input.txt"])
+## ```
+pub function parse(app: CliApp, raw_args: array) -> CliContext
+    return parser::parse(app, raw_args)
+end
+
+## Parses the process arguments into a resolved execution context.
+##
+## ### Parameters
+## - `app`: The application specification driving the parse.
+##
+## ### Returns
+## A `CliContext` with the resolved values and the collected diagnostics.
+pub function parse_args(app: CliApp) -> CliContext
+    return parser::parse_args(app)
+end
+
+## Parses an argument array, throwing a structured error on invalid input.
+##
+## Requires the `strict` feature (default-on).
+##
+## ### Parameters
+## - `app`: The application specification driving the parse.
+## - `raw_args`: The argument array to parse.
+##
+## ### Returns
+## A `CliContext` without diagnostics.
+##
+## ### Examples
+## ```alya
+## try
+##     let ctx = parse_strict(app, args())
+## catch err
+##     say format_caught_error(err)
 ## end
 ## ```
-pub function parse(app: CliApp, raw_args) -> CliContext
-    return app_parse(app, raw_args)
+@cfg(feature = "strict")
+pub function parse_strict(app: CliApp, raw_args: array) -> CliContext
+    return errors::parse_strict(app, raw_args)
 end
 
-## Automatically reads and parses process arguments (`sys::args()` / `args`) into a context.
+## Parses an argument array, converting failures into a result container.
+##
+## Requires the `strict` feature (default-on). Never throws.
 ##
 ## ### Parameters
-## - `app`: The target `CliApp` configuration model.
+## - `app`: The application specification driving the parse.
+## - `raw_args`: The argument array to parse.
 ##
 ## ### Returns
-## A `CliContext` containing parsed command-line state.
-##
-## ### Examples
-## ```alya
-## let ctx = cli::parse_args(app)
-## ```
-pub function parse_args(app: CliApp) -> CliContext
-    return app_parse_args(app)
+## A `CliResult` carrying either the context or the first diagnostic.
+@cfg(feature = "strict")
+pub function try_parse(app: CliApp, raw_args: array) -> CliResult
+    return errors::try_parse(app, raw_args)
 end
 
-## Formats and returns the complete help screen text for the application or a specific command.
-##
-## Requires the `help` feature (default-on).
+# ───────────────────────────────────────────────────────────────
+# Context accessors
+# ───────────────────────────────────────────────────────────────
+
+## Returns the state of a parsed flag.
 ##
 ## ### Parameters
-## - `app`: The target `CliApp` instance.
-## - `cmd`: Optional `CliCommand` instance. If omitted or `0`, renders root application help.
+## - `ctx`: The parsed context.
+## - `name`: Flag name, with or without leading dashes.
 ##
 ## ### Returns
-## Formatted multi-line help string.
-##
-## ### Examples
-## ```alya
-## let help_text = cli::help(app)
-## say help_text
-## ```
-@cfg(feature = "help")
-pub function help(app: CliApp, cmd = 0) -> string
-    return cli_format_help(app, cmd)
+## `true` when the flag was enabled, `false` otherwise.
+pub function get_flag(ctx: CliContext, name: string) -> bool
+    return parser::ctx_get_flag(ctx, name)
 end
 
-## Prints the formatted help screen directly to standard output.
+## Returns the value of a parsed option.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+## - `default_value`: Value returned when the option is absent. Defaults to `""`.
+##
+## ### Returns
+## The resolved option value, or `default_value`.
+pub function get_option(ctx: CliContext, name: string, default_value: string = "") -> string
+    return parser::ctx_get_option(ctx, name, default_value)
+end
+
+## Returns the value of a parsed option converted to an integer.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+## - `default_value`: Value returned when the option is absent or not numeric. Defaults to `0`.
+##
+## ### Returns
+## The integer value of the option, or `default_value`.
+pub function get_int(ctx: CliContext, name: string, default_value: int = 0) -> int
+    return parser::ctx_get_int(ctx, name, default_value)
+end
+
+## Returns the boolean value of a parsed option.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+##
+## ### Returns
+## `true` when the value reads as true, `false` otherwise.
+pub function get_bool(ctx: CliContext, name: string) -> bool
+    return parser::ctx_get_bool(ctx, name)
+end
+
+## Returns every value collected for a repeatable option.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Option name, with or without leading dashes.
+##
+## ### Returns
+## The collected values, or an empty array when the option is absent.
+pub function get_all(ctx: CliContext, name: string) -> array
+    return parser::ctx_get_all(ctx, name)
+end
+
+## Returns a positional value by position.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `index`: Zero-based position of the value.
+## - `default_value`: Value returned when the position is out of range. Defaults to `""`.
+##
+## ### Returns
+## The positional value, or `default_value`.
+pub function get_arg(ctx: CliContext, index: int, default_value: string = "") -> string
+    return parser::ctx_get_arg(ctx, index, default_value)
+end
+
+## Returns a positional value by argument name.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Argument name as declared in the specification.
+## - `default_value`: Value returned when the argument is absent. Defaults to `""`.
+##
+## ### Returns
+## The bound value, or `default_value`.
+pub function get_arg_named(ctx: CliContext, name: string, default_value: string = "") -> string
+    return parser::ctx_get_arg_named(ctx, name, default_value)
+end
+
+## Returns every positional value in order.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The positional values.
+pub function get_args(ctx: CliContext) -> array
+    return parser::ctx_get_args(ctx)
+end
+
+## Returns the name of the matched command.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The command name, or an empty string when no command was matched.
+pub function get_command(ctx: CliContext) -> string
+    return parser::ctx_get_command(ctx)
+end
+
+## Returns the full path of the matched command.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The space separated command path, e.g. `"remote add"`.
+pub function get_command_path(ctx: CliContext) -> string
+    return parser::ctx_get_command_path(ctx)
+end
+
+## Reports whether the given command was matched.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Command name or alias to look for.
+##
+## ### Returns
+## `true` when the command is active, `false` otherwise.
+pub function has_command(ctx: CliContext, name: string) -> bool
+    return parser::ctx_has_command(ctx, name)
+end
+
+## Reports whether the given flag, option, or repeatable option was provided.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+## - `name`: Flag or option name, with or without leading dashes.
+##
+## ### Returns
+## `true` when the value was provided, `false` otherwise.
+pub function has(ctx: CliContext, name: string) -> bool
+    return parser::ctx_has(ctx, name)
+end
+
+## Reports whether the parse collected diagnostics.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## `true` when at least one diagnostic was collected, `false` otherwise.
+pub function has_errors(ctx: CliContext) -> bool
+    return parser::ctx_has_errors(ctx)
+end
+
+## Returns the collected diagnostics.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## The `CliError` instances in the order they were produced.
+pub function get_errors(ctx: CliContext) -> array
+    return parser::ctx_get_errors(ctx)
+end
+
+## Reports whether help was requested.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## `true` when `-h` or `--help` was supplied.
+pub function help_requested(ctx: CliContext) -> bool
+    return parser::ctx_help_requested(ctx)
+end
+
+## Reports whether the version banner was requested.
+##
+## ### Parameters
+## - `ctx`: The parsed context.
+##
+## ### Returns
+## `true` when `-V` or `--version` was supplied.
+pub function version_requested(ctx: CliContext) -> bool
+    return parser::ctx_version_requested(ctx)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Usage screens
+# ───────────────────────────────────────────────────────────────
+
+## Formats the complete usage screen of an application.
 ##
 ## Requires the `help` feature (default-on).
 ##
 ## ### Parameters
-## - `app`: The target `CliApp` instance.
-## - `cmd`: Optional `CliCommand` instance. Defaults to `0` (root help).
+## - `app`: The application specification.
+##
+## ### Returns
+## The formatted multi-line usage screen.
 @cfg(feature = "help")
-pub function print_help(app: CliApp, cmd = 0)
-    say cli_format_help(app, cmd)
+pub function format_help(app: CliApp) -> string
+    return formatter::format_help(app)
 end
 
-## Prints the application version string directly to standard output.
+## Formats the complete usage screen of a single command.
 ##
 ## Requires the `help` feature (default-on).
 ##
 ## ### Parameters
-## - `app`: The target `CliApp` instance.
+## - `app`: The application specification.
+## - `cmd`: The command to render.
+##
+## ### Returns
+## The formatted multi-line usage screen.
+@cfg(feature = "help")
+pub function format_command_help(app: CliApp, cmd: CliCommand) -> string
+    return formatter::format_command_help(app, cmd)
+end
+
+## Formats the version banner of an application.
+##
+## Requires the `help` feature (default-on).
+##
+## ### Parameters
+## - `app`: The application specification.
+##
+## ### Returns
+## The version string, e.g. `"mytool 1.2.0"`.
+@cfg(feature = "help")
+pub function format_version(app: CliApp) -> string
+    return formatter::format_version(app)
+end
+
+## Formats a list of parse diagnostics into a report.
+##
+## Requires the `help` feature (default-on).
+##
+## ### Parameters
+## - `errors`: The diagnostics collected by the parsing engine.
+##
+## ### Returns
+## One `"Error: ..."` line per diagnostic.
+@cfg(feature = "help")
+pub function format_errors(errors: array) -> string
+    return formatter::format_errors(errors)
+end
+
+## Prints the usage screen of an application.
+##
+## Requires the `help` feature (default-on).
+##
+## ### Parameters
+## - `app`: The application specification.
+@cfg(feature = "help")
+pub function print_help(app: CliApp)
+    say formatter::format_help(app)
+end
+
+## Prints the usage screen of a single command.
+##
+## Requires the `help` feature (default-on).
+##
+## ### Parameters
+## - `app`: The application specification.
+## - `cmd`: The command to render.
+@cfg(feature = "help")
+pub function print_command_help(app: CliApp, cmd: CliCommand)
+    say formatter::format_command_help(app, cmd)
+end
+
+## Prints the version banner of an application.
+##
+## Requires the `help` feature (default-on).
+##
+## ### Parameters
+## - `app`: The application specification.
 @cfg(feature = "help")
 pub function print_version(app: CliApp)
-    say cli_format_version(app)
+    say formatter::format_version(app)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Feature-gated fallback stubs
+# ───────────────────────────────────────────────────────────────
+
+# The stubs below keep the public API surface stable when a feature slice is
+# disabled, so callers get a clear descriptive error instead of an
+# undefined reference (params unused by design).
+# alya-lint: disable unused-param
+
+## Fallback stub for `format_help` when the `help` feature is disabled.
+##
+## Rebuild with default features (or `--features help`) for the full
+## implementation in `src/core/formatter.alya`.
+@cfg(not(feature = "help"))
+pub function format_help(app: CliApp) -> string
+    throw "help feature is disabled (rebuild with default features or --features help)"
+end
+
+## Fallback stub for `format_command_help` when the `help` feature is disabled.
+##
+## Rebuild with default features (or `--features help`) for the full
+## implementation in `src/core/formatter.alya`.
+@cfg(not(feature = "help"))
+pub function format_command_help(app: CliApp, cmd: CliCommand) -> string
+    throw "help feature is disabled (rebuild with default features or --features help)"
+end
+
+## Fallback stub for `format_version` when the `help` feature is disabled.
+##
+## Rebuild with default features (or `--features help`) for the full
+## implementation in `src/core/formatter.alya`.
+@cfg(not(feature = "help"))
+pub function format_version(app: CliApp) -> string
+    throw "help feature is disabled (rebuild with default features or --features help)"
+end
+
+## Fallback stub for `format_errors` when the `help` feature is disabled.
+##
+## Rebuild with default features (or `--features help`) for the full
+## implementation in `src/core/formatter.alya`.
+@cfg(not(feature = "help"))
+pub function format_errors(errors: array) -> string
+    throw "help feature is disabled (rebuild with default features or --features help)"
+end
+
+## Fallback stub for `print_help` when the `help` feature is disabled.
+##
+## Rebuild with default features (or `--features help`) for the full
+## implementation in `src/core/formatter.alya`.
+@cfg(not(feature = "help"))
+pub function print_help(app: CliApp)
+    throw "help feature is disabled (rebuild with default features or --features help)"
+end
+
+## Fallback stub for `print_command_help` when the `help` feature is disabled.
+##
+## Rebuild with default features (or `--features help`) for the full
+## implementation in `src/core/formatter.alya`.
+@cfg(not(feature = "help"))
+pub function print_command_help(app: CliApp, cmd: CliCommand)
+    throw "help feature is disabled (rebuild with default features or --features help)"
+end
+
+## Fallback stub for `print_version` when the `help` feature is disabled.
+##
+## Rebuild with default features (or `--features help`) for the full
+## implementation in `src/core/formatter.alya`.
+@cfg(not(feature = "help"))
+pub function print_version(app: CliApp)
+    throw "help feature is disabled (rebuild with default features or --features help)"
+end
+
+## Fallback stub for `parse_strict` when the `strict` feature is disabled.
+##
+## Rebuild with default features (or `--features strict`) for the full
+## implementation in `src/core/errors.alya`.
+@cfg(not(feature = "strict"))
+pub function parse_strict(app: CliApp, raw_args: array) -> CliContext
+    throw "strict feature is disabled (rebuild with default features or --features strict)"
+end
+
+## Fallback stub for `try_parse` when the `strict` feature is disabled.
+##
+## Preserves the never-throws contract by returning a failed result carrying
+## the descriptive error. Rebuild with default features (or
+## `--features strict`) for the full implementation in `src/core/errors.alya`.
+@cfg(not(feature = "strict"))
+pub function try_parse(app: CliApp, raw_args: array) -> CliResult
+    let empty = CliContext {
+        app: app,
+        command_name: "",
+        command_path: "",
+        flags: {},
+        options: {},
+        multi_options: {},
+        provided: {},
+        positional: [],
+        named: {},
+        errors: [],
+        help_requested: false,
+        version_requested: false,
+        raw_args: []
+    }
+    return CliResult {
+        ok: false,
+        context: empty,
+        error: "strict feature is disabled (rebuild with default features or --features strict)"
+    }
+end
+# alya-lint: enable unused-param
+
+# ───────────────────────────────────────────────────────────────
+# Struct Methods: CliApp
+# ───────────────────────────────────────────────────────────────
+
+## Registers a boolean flag on this application.
+pub function CliApp.flag(self: CliApp, spec: string, description: string = "") -> CliApp
+    return spec::app_add_flag(self, spec, description)
+end
+
+## Registers a single-value option on this application.
+pub function CliApp.option(self: CliApp, spec: string, default_value: string = "", description: string = "") -> CliApp
+    return spec::app_add_option(self, spec, default_value, description)
+end
+
+## Registers a repeatable option on this application.
+pub function CliApp.multi_option(self: CliApp, spec: string, description: string = "") -> CliApp
+    return spec::app_add_multi_option(self, spec, description)
+end
+
+## Registers a choice-restricted option on this application.
+pub function CliApp.choice_option(self: CliApp, spec: string, default_value: string, choices: array, description: string = "") -> CliApp
+    return spec::app_add_choice_option(self, spec, default_value, choices, description)
+end
+
+## Registers a mandatory option on this application.
+pub function CliApp.required_option(self: CliApp, spec: string, description: string = "") -> CliApp
+    return spec::app_add_required_option(self, spec, description)
+end
+
+## Registers an environment-backed option on this application.
+pub function CliApp.env_option(self: CliApp, spec: string, env_var: string, default_value: string = "", description: string = "") -> CliApp
+    return spec::app_add_env_option(self, spec, env_var, default_value, description)
+end
+
+## Registers a positional argument on this application.
+pub function CliApp.argument(self: CliApp, name: string, description: string = "", required: bool = false, default_value: string = "") -> CliApp
+    return spec::app_add_argument(self, name, description, required, default_value)
+end
+
+## Registers a variadic positional argument on this application.
+pub function CliApp.variadic_argument(self: CliApp, name: string, description: string = "") -> CliApp
+    return spec::app_add_variadic_argument(self, name, description)
+end
+
+## Registers a command on this application.
+pub function CliApp.command(self: CliApp, command: CliCommand) -> CliApp
+    return spec::app_add_command(self, command)
+end
+
+## Sets the author string of this application.
+pub function CliApp.set_author(self: CliApp, author: string) -> CliApp
+    return spec::app_set_author(self, author)
+end
+
+## Sets the version string of this application.
+pub function CliApp.set_version(self: CliApp, version: string) -> CliApp
+    return spec::app_set_version(self, version)
+end
+
+## Parses an argument array with this application.
+pub function CliApp.parse(self: CliApp, raw_args: array) -> CliContext
+    return parser::parse(self, raw_args)
+end
+
+## Parses the given arguments, or the process arguments when none are given.
+pub function CliApp.run(self: CliApp, raw_args = null) -> CliContext
+    if raw_args is null
+        return parser::parse_args(self)
+    end
+    return parser::parse(self, raw_args)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Struct Methods: CliCommand
+# ───────────────────────────────────────────────────────────────
+
+## Registers a boolean flag on this command.
+pub function CliCommand.flag(self: CliCommand, spec: string, description: string = "") -> CliCommand
+    return spec::cmd_add_flag(self, spec, description)
+end
+
+## Registers a single-value option on this command.
+pub function CliCommand.option(self: CliCommand, spec: string, default_value: string = "", description: string = "") -> CliCommand
+    return spec::cmd_add_option(self, spec, default_value, description)
+end
+
+## Registers a repeatable option on this command.
+pub function CliCommand.multi_option(self: CliCommand, spec: string, description: string = "") -> CliCommand
+    return spec::cmd_add_multi_option(self, spec, description)
+end
+
+## Registers a choice-restricted option on this command.
+pub function CliCommand.choice_option(self: CliCommand, spec: string, default_value: string, choices: array, description: string = "") -> CliCommand
+    return spec::cmd_add_choice_option(self, spec, default_value, choices, description)
+end
+
+## Registers a mandatory option on this command.
+pub function CliCommand.required_option(self: CliCommand, spec: string, description: string = "") -> CliCommand
+    return spec::cmd_add_required_option(self, spec, description)
+end
+
+## Registers an environment-backed option on this command.
+pub function CliCommand.env_option(self: CliCommand, spec: string, env_var: string, default_value: string = "", description: string = "") -> CliCommand
+    return spec::cmd_add_env_option(self, spec, env_var, default_value, description)
+end
+
+## Registers a positional argument on this command.
+pub function CliCommand.argument(self: CliCommand, name: string, description: string = "", required: bool = false, default_value: string = "") -> CliCommand
+    return spec::cmd_add_argument(self, name, description, required, default_value)
+end
+
+## Registers a variadic positional argument on this command.
+pub function CliCommand.variadic_argument(self: CliCommand, name: string, description: string = "") -> CliCommand
+    return spec::cmd_add_variadic_argument(self, name, description)
+end
+
+## Nests a command under this command.
+pub function CliCommand.subcommand(self: CliCommand, child: CliCommand) -> CliCommand
+    return spec::cmd_add_subcommand(self, child)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Struct Methods: CliContext
+# ───────────────────────────────────────────────────────────────
+
+## Returns the state of a parsed flag.
+pub function CliContext.get_flag(self: CliContext, name: string) -> bool
+    return parser::ctx_get_flag(self, name)
+end
+
+## Alias for `get_flag` on this context.
+pub function CliContext.flag(self: CliContext, name: string) -> bool
+    return parser::ctx_get_flag(self, name)
+end
+
+## Returns the value of a parsed option.
+pub function CliContext.get_option(self: CliContext, name: string, default_value: string = "") -> string
+    return parser::ctx_get_option(self, name, default_value)
+end
+
+## Alias for `get_option` on this context.
+pub function CliContext.option(self: CliContext, name: string, default_value: string = "") -> string
+    return parser::ctx_get_option(self, name, default_value)
+end
+
+## Returns the value of a parsed option converted to an integer.
+pub function CliContext.get_int(self: CliContext, name: string, default_value: int = 0) -> int
+    return parser::ctx_get_int(self, name, default_value)
+end
+
+## Returns the boolean value of a parsed option.
+pub function CliContext.get_bool(self: CliContext, name: string) -> bool
+    return parser::ctx_get_bool(self, name)
+end
+
+## Returns every value collected for a repeatable option.
+pub function CliContext.get_all(self: CliContext, name: string) -> array
+    return parser::ctx_get_all(self, name)
+end
+
+## Returns a positional value by position.
+pub function CliContext.get_arg(self: CliContext, index: int, default_value: string = "") -> string
+    return parser::ctx_get_arg(self, index, default_value)
+end
+
+## Alias for `get_arg` on this context.
+pub function CliContext.arg(self: CliContext, index: int, default_value: string = "") -> string
+    return parser::ctx_get_arg(self, index, default_value)
+end
+
+## Returns a positional value by argument name.
+pub function CliContext.get_arg_named(self: CliContext, name: string, default_value: string = "") -> string
+    return parser::ctx_get_arg_named(self, name, default_value)
+end
+
+## Returns every positional value in order.
+pub function CliContext.get_args(self: CliContext) -> array
+    return parser::ctx_get_args(self)
+end
+
+## Alias for `get_args` on this context.
+pub function CliContext.args(self: CliContext) -> array
+    return parser::ctx_get_args(self)
+end
+
+## Returns the name of the matched command.
+pub function CliContext.get_command(self: CliContext) -> string
+    return parser::ctx_get_command(self)
+end
+
+## Alias for `get_command` on this context.
+pub function CliContext.command(self: CliContext) -> string
+    return parser::ctx_get_command(self)
+end
+
+## Returns the full path of the matched command.
+pub function CliContext.get_command_path(self: CliContext) -> string
+    return parser::ctx_get_command_path(self)
+end
+
+## Reports whether the given command was matched.
+pub function CliContext.has_command(self: CliContext, name: string) -> bool
+    return parser::ctx_has_command(self, name)
+end
+
+## Reports whether the given flag, option, or repeatable option was provided.
+pub function CliContext.has(self: CliContext, name: string) -> bool
+    return parser::ctx_has(self, name)
+end
+
+## Reports whether this context carries diagnostics.
+pub function CliContext.has_errors(self: CliContext) -> bool
+    return parser::ctx_has_errors(self)
+end
+
+## Returns the collected diagnostics.
+pub function CliContext.get_errors(self: CliContext) -> array
+    return parser::ctx_get_errors(self)
+end
+
+## Alias for `get_errors` on this context.
+pub function CliContext.errors(self: CliContext) -> array
+    return parser::ctx_get_errors(self)
+end
+
+## Reports whether help was requested.
+pub function CliContext.help_requested(self: CliContext) -> bool
+    return parser::ctx_help_requested(self)
+end
+
+## Reports whether the version banner was requested.
+pub function CliContext.version_requested(self: CliContext) -> bool
+    return parser::ctx_version_requested(self)
+end
+
+# ───────────────────────────────────────────────────────────────
+# Struct Methods: CliResult
+# ───────────────────────────────────────────────────────────────
+
+## Reports whether the strict parse succeeded.
+pub function CliResult.is_ok(self: CliResult) -> bool
+    return self.ok == true
+end
+
+## Reports whether the strict parse failed.
+pub function CliResult.is_error(self: CliResult) -> bool
+    return self.ok == false
+end
+
+## Returns the diagnostic message of a failed strict parse.
+pub function CliResult.message(self: CliResult) -> string
+    return self.error
+end
+
+## Returns the parsed context of a strict parse.
+##
+## The context is empty when the parse failed; check `is_ok()` first.
+##
+## ### Parameters
+## - `self`: The target `CliResult` instance.
+##
+## ### Returns
+## The parsed `CliContext`.
+##
+## ### Examples
+## ```alya
+## let result = try_parse(app, args())
+## if result.is_ok()
+##     say result.context().get_option("output", "dist")
+## end
+## ```
+pub function CliResult.context(self: CliResult) -> CliContext
+    return self.context
 end

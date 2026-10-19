@@ -1,0 +1,71 @@
+## Test suite for the cli package: strict parsing and error recovery (`strict` feature)
+## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+##
+## The strict slice adds the throwing and recovering parse entry points on
+## top of the lenient engine. Without the feature the file keeps a skip
+## stub, so every feature combination stays green.
+
+import "std/test"
+import "../src/lib.alya" as cli
+
+@cfg(not(feature = "strict"))
+function main()
+    test_suite("CLI Strict Parsing Tests (skipped without strict feature)")
+    let r = runner_new()
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+@cfg(feature = "strict")
+function main()
+    test_suite("CLI Strict Parsing Tests")
+    let r = runner_new()
+
+    let app = cli::new_app("strict-app", "Strict parsing demo", "1.0.0")
+    app.required_option("-c, --config", "Configuration file")
+    app.flag("-v, --verbose", "Verbose output")
+
+    # ═══════════════════════════════════════════════════════════
+    # 1. The strict parse succeeds on valid input
+    # ═══════════════════════════════════════════════════════════
+    let ctx = cli::parse_strict(app, ["-c", "app.toml", "-v"])
+    runner_assert_eq(r, ctx.get_flag("verbose"), true, "the strict parse resolves the flags")
+    runner_assert_str_eq(r, ctx.get_option("config"), "app.toml", "the strict parse resolves the options")
+
+    # ═══════════════════════════════════════════════════════════
+    # 2. The strict parse throws a structured error
+    # ═══════════════════════════════════════════════════════════
+    let threw = false
+    try
+        cli::parse_strict(app, ["-v"])
+    catch err
+        threw = true
+        runner_assert_eq(r, err.code, cli::ErrorCode.MissingRequired, "the thrown error carries the expected code")
+        runner_assert_str_eq(r, cli::format_caught_error(err), "CliError(config): Missing required option: --config", "the caught error renders subject and message")
+    end
+    runner_assert_true(r, threw, "the strict parse throws on invalid input")
+
+    # ═══════════════════════════════════════════════════════════
+    # 3. The recovering parse converts failures into a result
+    # ═══════════════════════════════════════════════════════════
+    let failed_result = cli::try_parse(app, ["-v"])
+    runner_assert_eq(r, failed_result.is_error(), true, "the recovering parse reports the failure")
+    runner_assert_eq(r, failed_result.is_ok(), false, "the recovering parse does not report success")
+    runner_assert_str_eq(r, failed_result.message(), "CliError(config): Missing required option: --config", "the result carries the diagnostic")
+
+    let ok_result = cli::try_parse(app, ["-c", "app.toml"])
+    runner_assert_eq(r, ok_result.is_ok(), true, "the recovering parse reports success on valid input")
+    runner_assert_eq(r, ok_result.is_error(), false, "the recovering parse does not report a failure")
+    runner_assert_str_eq(r, ok_result.message(), "", "a successful result carries no diagnostic")
+    runner_assert_str_eq(r, ok_result.context().get_option("config"), "app.toml", "the result carries the parsed context")
+    runner_assert_eq(r, ok_result.context().has_errors(), false, "the carried context is free of diagnostics")
+
+    let failed = runner_summary(r)
+    if failed > 0
+        exit(1)
+    end
+end
+
+main()

@@ -1,5 +1,6 @@
-## Test suite for subcommands, command aliases, and command-specific options
+## Test suite for the cli package: subcommands, aliases, nesting, and command-scoped options
 ## Part of the Alya Language package ecosystem (https://github.com/alya-lang)
+
 import "std/test"
 import "../src/lib.alya" as cli
 
@@ -7,55 +8,105 @@ function main()
     test_suite("CLI Subcommands & Routing Tests")
     let r = runner_new()
 
-    let app = cli::new("git-tool", "A modern VCS tool", "3.0.0")
-    cli::app_add_flag(app, "-v, --verbose", "Global verbose flag")
+    let app = cli::new_app("git-tool", "A modern VCS tool", "3.0.0")
+    app.flag("-v, --verbose", "Global verbose flag")
 
     # Command 1: build (alias: b)
-    let build_cmd = cli::command("build", "Compile target project", ["b"])
-    cli::cmd_add_flag(build_cmd, "-r, --release", "Build in release mode")
-    cli::cmd_add_option(build_cmd, "-t, --target", "x64", "Target architecture")
-    cli::cmd_add_argument(build_cmd, "source", "Main source entry")
-    cli::app_add_command(app, build_cmd)
+    let build = cli::new_command("build", "Compile target project", ["b"])
+    build.flag("-r, --release", "Build in release mode")
+    build.option("-t, --target", "x64", "Target architecture")
+    build.argument("source", "Main source entry")
+    app.command(build)
 
     # Command 2: test (alias: t)
-    let test_cmd = cli::command("test", "Run test suite", ["t"])
-    cli::cmd_add_flag(test_cmd, "--watch", "Watch file changes")
-    cli::app_add_command(app, test_cmd)
+    let test_cmd = cli::new_command("test", "Run test suite", ["t"])
+    test_cmd.flag("--watch", "Watch file changes")
+    app.command(test_cmd)
 
-    # Command 3: remote with nested subcommand: add
-    let remote_cmd = cli::command("remote", "Manage remotes")
-    let remote_add = cli::command("add", "Add a new remote")
-    cli::cmd_add_argument(remote_add, "name", "Remote name")
-    cli::cmd_add_argument(remote_add, "url", "Remote URL")
-    cli::cmd_add_subcommand(remote_cmd, remote_add)
-    cli::app_add_command(app, remote_cmd)
+    # Command 3: remote with the nested subcommand add
+    let remote = cli::new_command("remote", "Manage remotes")
+    let remote_add = cli::new_command("add", "Add a new remote")
+    remote_add.argument("name", "Remote name")
+    remote_add.argument("url", "Remote URL")
+    remote.subcommand(remote_add)
+    app.command(remote)
+    # ═══════════════════════════════════════════════════════════
+    # 1. Matching a command by its primary name
+    # ═══════════════════════════════════════════════════════════
+    let ctx1 = app.parse(["build", "-r", "--target=arm64", "app.alya"])
+    runner_assert_str_eq(r, ctx1.get_command(), "build", "the build command is matched")
+    runner_assert_eq(r, ctx1.has_command("build"), true, "has_command reports the active command")
+    runner_assert_str_eq(r, ctx1.get_command_path(), "build", "the command path is recorded")
+    runner_assert_eq(r, ctx1.get_flag("release"), true, "the command-scoped flag is parsed")
+    runner_assert_str_eq(r, ctx1.get_option("target"), "arm64", "the command-scoped option is parsed")
+    runner_assert_str_eq(r, ctx1.get_arg_named("source"), "app.alya", "the command argument is bound")
+    runner_assert_eq(r, ctx1.has_errors(), false, "a valid command invocation produces no diagnostics")
 
-    # 1. Matching command by primary name
-    let ctx1 = cli::parse(app, ["build", "-r", "--target=arm64", "app.alya"])
-    runner_assert_str_eq(r, cli::ctx_get_command(ctx1), "build", "matched build command")
-    runner_assert_eq(r, cli::ctx_has_command(ctx1, "build"), true, "ctx_has_command build is 1")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx1, "release"), true, "command flag release is 1")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx1, "target"), "arm64", "command option target is arm64")
-    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx1, "source"), "app.alya", "command arg source is app.alya")
+    # ═══════════════════════════════════════════════════════════
+    # 2. Matching a command by its alias
+    # ═══════════════════════════════════════════════════════════
+    let ctx2 = app.parse(["b", "-t", "wasm", "web.alya"])
+    runner_assert_str_eq(r, ctx2.get_command(), "build", "the alias resolves to the command")
+    runner_assert_str_eq(r, ctx2.get_option("target"), "wasm", "command options work through the alias")
+    runner_assert_str_eq(r, ctx2.get_arg_named("source"), "web.alya", "command arguments work through the alias")
 
-    # 2. Matching command by alias: 'b' instead of 'build'
-    let ctx2 = cli::parse(app, ["b", "-t", "wasm", "web.alya"])
-    runner_assert_str_eq(r, cli::ctx_get_command(ctx2), "build", "alias b maps to command build")
-    runner_assert_str_eq(r, cli::ctx_get_option(ctx2, "target"), "wasm", "target via alias is wasm")
-    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx2, "source"), "web.alya", "source via alias is web.alya")
-
+    # ═══════════════════════════════════════════════════════════
     # 3. Global flags combined with subcommands
-    let ctx3 = cli::parse(app, ["--verbose", "test", "--watch"])
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "verbose"), true, "global verbose flag parsed before command")
-    runner_assert_str_eq(r, cli::ctx_get_command(ctx3), "test", "matched test command")
-    runner_assert_eq(r, cli::ctx_get_flag(ctx3, "watch"), true, "test specific flag watch is 1")
+    # ═══════════════════════════════════════════════════════════
+    let ctx3 = app.parse(["--verbose", "test", "--watch"])
+    runner_assert_eq(r, ctx3.get_flag("verbose"), true, "the global flag is parsed before the command")
+    runner_assert_str_eq(r, ctx3.get_command(), "test", "the test command is matched")
+    runner_assert_eq(r, ctx3.get_flag("watch"), true, "the command-scoped flag is parsed")
 
-    # 4. Nested subcommands: remote add origin https://...
-    let ctx4 = cli::parse(app, ["remote", "add", "origin", "https://github.com/alya-lang/cli.git"])
-    runner_assert_str_eq(r, cli::ctx_get_command(ctx4), "remote add", "nested command remote add matched")
-    runner_assert_eq(r, len(cli::ctx_get_args(ctx4)), 2, "2 positional arguments for remote add")
-    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx4, "name"), "origin", "remote name is origin")
-    runner_assert_str_eq(r, cli::ctx_get_arg_named(ctx4, "url"), "https://github.com/alya-lang/cli.git", "remote url matches")
+    # ═══════════════════════════════════════════════════════════
+    # 4. Global options keep their value across a command
+    # ═══════════════════════════════════════════════════════════
+    let app2 = cli::new_app("globals", "Global option demo", "1.0.0")
+    app2.option("--profile", "default", "Build profile")
+    let deploy = cli::new_command("deploy", "Deploy the application")
+    app2.command(deploy)
+    let ctx4 = app2.parse(["--profile=release", "deploy"])
+    runner_assert_str_eq(r, ctx4.get_option("profile"), "release", "the global option survives the command switch")
+    runner_assert_str_eq(r, ctx4.get_command(), "deploy", "the command is matched")
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. Nested subcommands
+    # ═══════════════════════════════════════════════════════════
+    let ctx5 = app.parse(["remote", "add", "origin", "https://github.com/alya-lang/cli.git"])
+    runner_assert_str_eq(r, ctx5.get_command_path(), "remote add", "the nested command path is recorded")
+    runner_assert_eq(r, len(ctx5.get_args()), 2, "both positional values are collected")
+    runner_assert_str_eq(r, ctx5.get_arg_named("name"), "origin", "the first nested argument is bound")
+    runner_assert_str_eq(r, ctx5.get_arg_named("url"), "https://github.com/alya-lang/cli.git", "the second nested argument is bound")
+
+    # ═══════════════════════════════════════════════════════════
+    # 6. A command name is not a positional value
+    # ═══════════════════════════════════════════════════════════
+    let app3 = cli::new_app("strict-commands", "Command routing demo", "1.0.0")
+    let only = cli::new_command("run", "Run the task")
+    app3.command(only)
+    let ctx6 = app3.parse(["run"])
+    runner_assert_eq(r, len(ctx6.get_args()), 0, "the command name is not bound as a positional")
+    runner_assert_str_eq(r, ctx6.get_command(), "run", "the command is still matched")
+
+    # ═══════════════════════════════════════════════════════════
+    # 7. A command re-declaring a global option
+    # ═══════════════════════════════════════════════════════════
+    let app4 = cli::new_app("shadow", "Shadowed option demo", "1.0.0")
+    app4.required_option("--profile", "Build profile")
+    let deploy = cli::new_command("deploy", "Deploy the application")
+    deploy.option("--profile", "release", "Deployment profile")
+    deploy.required_option("--token", "Access token")
+    app4.command(deploy)
+
+    # The value given before the command name survives the command scope.
+    let ctx7 = app4.parse(["--profile=staging", "deploy", "--token=abc"])
+    runner_assert_str_eq(r, ctx7.get_option("profile"), "staging", "the value given before the command is kept")
+    runner_assert_eq(r, ctx7.has_errors(), false, "the re-declared option produces no diagnostic")
+
+    # The shadowed global option is validated only once.
+    let ctx8 = app4.parse(["deploy"])
+    runner_assert_eq(r, ctx8.has_errors(), true, "the missing token is reported")
+    runner_assert_eq(r, len(ctx8.get_errors()), 1, "the re-declared option does not duplicate the diagnostic")
 
     let failed = runner_summary(r)
     if failed > 0
